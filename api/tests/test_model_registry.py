@@ -68,6 +68,11 @@ async def test_crud_roundtrips_model_registry():
     from app.models.model_registry import ModelFramework
     from app.schemas.model_registry import ModelRegistryCreate, ModelRegistryRead
 
+    # Re-bind the shared async engine to this test's event loop: an earlier
+    # sync TestClient test can leave asyncpg connections bound to a closed loop
+    # (test isolation only; production runs a single loop).
+    await async_engine.dispose()
+
     async with local_session() as db:
         created = await crud_model_registry.create(
             db=db,

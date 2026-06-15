@@ -59,6 +59,17 @@ class ClientSideCacheSettings(BaseSettings):
     CLIENT_CACHE_MAX_AGE: int = config("CLIENT_CACHE_MAX_AGE", default=60)
 
 
+class ModelStoreSettings(BaseSettings):
+    # Root dir for registered model artifacts (gitignored data/models, 卡 #17).
+    # Default anchors at the repo-root data/models (api/src/app/core -> ../../../../data/models).
+    MODELS_ROOT: str = config(
+        "MODELS_ROOT",
+        default=os.path.abspath(
+            os.path.join(current_file_dir, "..", "..", "..", "..", "data", "models")
+        ),
+    )
+
+
 class EnvironmentOption(Enum):
     LOCAL = "local"
     STAGING = "staging"
@@ -74,6 +85,7 @@ class Settings(
     PostgresSettings,
     RedisCacheSettings,
     ClientSideCacheSettings,
+    ModelStoreSettings,
     EnvironmentSettings,
 ):
     pass

@@ -71,6 +71,11 @@ async def test_register_then_retrieve_roundtrip(tmp_path):
 
     store = ModelStore(models_root=tmp_path / "models")
 
+    # Re-bind the shared async engine to this test's event loop: an earlier
+    # sync TestClient test can leave asyncpg connections bound to a closed loop
+    # (test isolation only; production runs a single loop).
+    await async_engine.dispose()
+
     async with local_session() as db:
         record = await store.register(
             db=db,
