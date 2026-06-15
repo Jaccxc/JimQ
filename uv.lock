@@ -332,12 +332,14 @@ source = { editable = "engine" }
 dependencies = [
     { name = "jimq-core" },
     { name = "nautilus-trader" },
+    { name = "redis" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "jimq-core", editable = "libs/jimq_core" },
     { name = "nautilus-trader", specifier = "==1.228.0" },
+    { name = "redis", specifier = ">=5" },
 ]
 
 [[package]]
