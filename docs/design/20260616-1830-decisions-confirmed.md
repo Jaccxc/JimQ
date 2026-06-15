@@ -53,6 +53,16 @@
 - `tech-stack-decisions` AD-1/AD-11 以本文 B1/B1b 為準(SB3 + 自訂 env 主線、TorchTrade 探勘)。
 - ZeroMQ(AD-2)、Postgres(AD-3)、市場(AD-4)、頻率(AD-13)等均依本文定案。
 
+## B5 — FastAPI 後端基底(2026-06-16 追加定案)
+
+- **Fork `benavlabs/FastAPI-boilerplate` 的 v0.15.0 classic**(`src/app/` 佈局,MIT)。理由:佈局符合預期、auth 耦合最少、`posts` 模組可當交易模組範本。
+- **KEEP**:async SQLAlchemy 2.0、`core/config.py`(精簡)、`core/setup.py`(去 superuser docs gate)、`core/utils/cache.py`、exceptions、middleware、FastCRUD 模式、Alembic、docker-compose 的 db+redis+web。
+- **STRIP**:users / posts / tiers / rate_limit / login / logout / `core/security.py` / token_blacklist / admin(crudadmin)/ `scripts.create_first_*` / auth deps / Crypt+FirstUser+CRUDAdmin settings mixin。
+- **移除 ARQ worker**(Nautilus 才是 bus/worker)。rate-limiter 依賴 user/tier → 改 flat IP 級或移除。
+- **Redis 隔離**:cache 用**不同 DB index/實例**,與 Nautilus message bus/streams 分開。
+- **新 CRUD 模組(應用資料)**:`strategy` / `backtest_run` / `trade_journal` / `model_registry`(皆無 user FK)。**注意**:bars/orders/positions/pnl **主要走 WS 串流 + catalog 歷史查詢,非 DB CRUD**。
+- 完整結構見 `docs/design/20260616-1845-repo-structure-final.md`。
+
 ## 下一步:Phase 0 地基(待你指示開工)
 
 1. monorepo + uv workspace(`libs/jimq_core`、`engine`、`api`;`research` 獨立 venv)
