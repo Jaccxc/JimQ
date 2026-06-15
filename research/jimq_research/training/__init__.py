@@ -16,6 +16,15 @@ from jimq_research.training.store import (
     persist_summaries,
     query_runs,
 )
+from jimq_research.training.tracking import (
+    log_artifacts,
+    log_metrics,
+    log_params,
+    log_summary_to_mlflow,
+    resolve_tracking_uri,
+    track_run,
+    track_summaries,
+)
 
 __all__ = [
     "expand_grid",
@@ -26,4 +35,11 @@ __all__ = [
     "local_engine_url",
     "persist_summaries",
     "query_runs",
+    "track_run",
+    "log_metrics",
+    "log_params",
+    "log_artifacts",
+    "log_summary_to_mlflow",
+    "track_summaries",
+    "resolve_tracking_uri",
 ]
