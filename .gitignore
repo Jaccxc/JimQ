@@ -21,6 +21,9 @@ dist/
 # 不要誤殺套件內的 data 子模組(如 research/jimq_research/data 原始碼)。
 /data/
 !/data/.gitkeep
+# research 腳本(grid / 研究 demo)從 research/ 跑時,MLflow 退路 sqlite 與
+# 本地 artifact 會落在 CWD 相對的 research/data/(非套件原始碼,不入 git)。
+/research/data/
 *.parquet
 *.feather
 *.pt
