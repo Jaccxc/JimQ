@@ -17,9 +17,10 @@ node_modules/
 dist/
 .vite/
 
-# 本地資料與模型(大檔,不入 git)
-data/
-!data/.gitkeep
+# 本地資料與模型(大檔,不入 git)。錨定 repo 根的 data/(catalog + 權重),
+# 不要誤殺套件內的 data 子模組(如 research/jimq_research/data 原始碼)。
+/data/
+!/data/.gitkeep
 *.parquet
 *.feather
 *.pt
