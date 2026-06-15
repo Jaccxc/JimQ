@@ -15,7 +15,7 @@ nautilus_trader,僅在型別註解使用 ``TYPE_CHECKING`` 匯入(實際呼叫�
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict
 
@@ -24,6 +24,9 @@ if TYPE_CHECKING:  # pragma: no cover - 僅供型別檢查,執行期不匯入 na
 
 # 奈秒 → 秒。
 _NS_PER_SEC = 1_000_000_000
+
+# WS 多工 channel 名稱(共用契約)。consumer/hub/ws gateway 與前端共用。
+Channel = Literal["bars", "orders", "fills", "positions", "pnl"]
 
 
 class BarDTO(BaseModel):
@@ -56,3 +59,31 @@ class BarDTO(BaseModel):
             close=str(bar.close),
             volume=str(bar.volume),
         )
+
+
+def bar_event_data(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """把 Nautilus ``Bar`` 串流 payload(已反序列化的 dict)補上 BarDTO 對齊欄位。
+
+    串流 payload 帶字串 OHLCV 與字串 ``ts_init``(epoch 奈秒);此函式回傳要
+    併入 WS ``data`` 的補強欄位:``ts``(int 奈秒)與 ``time``(int epoch 秒,
+    直接餵 Lightweight Charts ``UTCTimestamp``)。OHLCV 維持字串保留精度。
+    """
+    ts = int(payload["ts_init"])
+    return {"ts": ts, "time": ts // _NS_PER_SEC}
+
+
+class StreamEnvelope(BaseModel):
+    """WS 串流信封共用契約 ``{channel, seq, data}``(卡 #7)。
+
+    consumer 正規化後發出、hub 派送、ws gateway 推給 client 的統一外殼。
+    - ``channel``:多工 channel(bars/orders/fills/positions/pnl)。
+    - ``seq``:consumer 端單調序號(client 用於 last_seq 補洞)。
+    - ``data``:正規化後的事件 payload(bars 帶 BarDTO 對齊欄位;其餘事件
+      帶 Nautilus 純量 dict 並保留 ``type`` 供 client 分辨子型別)。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    channel: Channel
+    seq: int
+    data: dict[str, Any]
