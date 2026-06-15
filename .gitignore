@@ -1,6 +1,9 @@
 # Python
 __pycache__/
 *.py[cod]
+
+# FastAPI logger rotating output (api/src/app/core/logger.py)
+api/src/app/logs/
 .venv/
 venv/
 .uv/
