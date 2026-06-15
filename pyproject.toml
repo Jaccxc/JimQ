@@ -1,0 +1,34 @@
+[project]
+name = "jimq"
+version = "0.1.0"
+description = "JimQ — NautilusTrader-based quant trading platform (monorepo root)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "jimq-core",
+    "jimq-engine",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.uv.workspace]
+members = ["libs/jimq_core", "engine", "api"]
+
+[tool.uv.sources]
+jimq-core = { workspace = true }
+jimq-engine = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# root is an aggregator only; no importable package of its own
+bypass-selection = true
