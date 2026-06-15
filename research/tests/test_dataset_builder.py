@@ -26,7 +26,7 @@ from jimq_engine.catalog.ingest import (
 from jimq_engine.catalog.instruments import btcusdt_perp_binance
 from nautilus_trader.persistence.catalog import ParquetDataCatalog
 
-from jimq_research.data import build_dataset, ema_feature
+from jimq_research.data import build_dataset, ema_feature, funding_feature
 
 _BASE_MS = 1700000000000
 
@@ -154,6 +154,24 @@ def test_time_slice_start_end(tmp_path):
     assert df.height == 5
     assert df["ts"].to_list()[0] == start_ns
     assert df["ts"].to_list()[-1] == end_ns
+
+
+def test_funding_feature_asof_joins_latest_rate(tmp_path):
+    """funding_feature 把 catalog 的 funding rate 以 as-of(<=ts)併到每根 bar。
+
+    fixture 的 funding 在 _BASE_MS 起 8h 一筆,30 根 1m bar 全落在第一個區間內,
+    故每根 bar 的 funding_rate 應等於第一筆 rate(0.0001),不應有 null。
+    """
+    catalog = _make_catalog(tmp_path)
+    df = build_dataset(
+        catalog,
+        bar_type=BAR_TYPE_1M,
+        feature_fns=[funding_feature(catalog, name="funding_rate")],
+    )
+    assert "funding_rate" in df.columns
+    rates = df["funding_rate"].to_list()
+    assert all(r is not None for r in rates)
+    assert all(abs(r - 0.0001) < 1e-12 for r in rates)
 
 
 def test_no_feature_fns_yields_only_ohlcv(tmp_path):

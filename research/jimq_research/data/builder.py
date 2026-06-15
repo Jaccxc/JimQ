@@ -37,7 +37,9 @@ from nautilus_trader.model.data import Bar, BarType
 from nautilus_trader.persistence.catalog import ParquetDataCatalog
 
 from jimq_core.features import ExponentialMovingAverage
-from jimq_engine.catalog.ingest import query_bars
+from jimq_engine.catalog.ingest import query_funding, query_bars
+from jimq_engine.catalog.instruments import BTCUSDT_PERP_BINANCE_ID
+from nautilus_trader.model.identifiers import InstrumentId
 
 # 一個 feature_fn:吃目前 frame,回傳具名 Series(新欄)或整個 DataFrame。
 FeatureFn = Callable[[pl.DataFrame], "pl.Series | pl.DataFrame"]
@@ -153,5 +155,40 @@ def ema_feature(
             ema.update_raw(x)
             out.append(ema.value if ema.initialized else None)
         return pl.Series(name=col_name, values=out, dtype=pl.Float64)
+
+    return _fn
+
+
+def funding_feature(
+    catalog: ParquetDataCatalog,
+    instrument_id: InstrumentId = BTCUSDT_PERP_BINANCE_ID,
+    name: str = "funding_rate",
+) -> FeatureFn:
+    """內建特徵 factory:把 catalog 的 funding rate 以 as-of join 併到每根 bar。
+
+    funding 與 bar 是不同 cadence(永續 funding 通常 8h 一次,bar 1m),因此用
+    backward as-of join:每根 bar 取「ts_init <= bar.ts 的最新一筆 funding rate」。
+    bar 時間早於第一筆 funding 者填 ``None``(暖機期),不硬編填補策略。
+
+    讀取走 ``jimq_engine.catalog.query_funding``(單一真相來源)。回傳 ``feature_fn``
+    可放進 ``build_dataset(feature_fns=[...])``。funding 在此被當作「特徵」注入,
+    平台不假設它一定要被使用(pluggable)。
+    """
+
+    def _fn(frame: pl.DataFrame) -> pl.DataFrame:
+        if frame.height == 0:
+            return frame.with_columns(pl.lit(None, dtype=pl.Float64).alias(name))
+        bar_end = int(frame["ts"].max())
+        updates = query_funding(catalog, instrument_id, start=None, end=bar_end)
+        funding = pl.DataFrame(
+            {
+                "ts": [int(u.ts_init) for u in updates],
+                name: [float(u.rate) for u in updates],
+            },
+            schema={"ts": pl.Int64, name: pl.Float64},
+        ).sort("ts")
+        if funding.height == 0:
+            return frame.with_columns(pl.lit(None, dtype=pl.Float64).alias(name))
+        return frame.sort("ts").join_asof(funding, on="ts", strategy="backward")
 
     return _fn
