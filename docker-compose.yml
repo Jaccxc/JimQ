@@ -37,6 +37,77 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  # --- FastAPI 後端(卡 #4/#7/#8;#10 容器化)---------------------------------
+  # 啟動先 alembic upgrade head(鐵律 2)再 uvicorn。讀 bus DB0(@latest 解析
+  # engine 寫入的 stream key)→ consumer → hub → WS。REST /bars 讀共享 catalog volume。
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    container_name: jimq-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      POSTGRES_DB: ${POSTGRES_DB:-jimq}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_CACHE_DB: 1
+      # @latest:從 bus DB0 的 jimq:latest_stream_key 讀 engine 最近一次 backtest 的 key。
+      JIMQ_STREAM_KEY: "@latest"
+      JIMQ_CATALOG_PATH: /data/catalog
+      ENVIRONMENT: local
+    volumes:
+      - catalog-data:/data/catalog
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    restart: unless-stopped
+
+  # --- 前端(卡 #9;#10 容器化)----------------------------------------------
+  # Node 18 build → nginx 靜態伺服 + 反代 /api、/ws 到 api。
+  web:
+    build:
+      context: ./web
+      dockerfile: ../infra/docker/web/Dockerfile
+    container_name: jimq-web
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    restart: unless-stopped
+
+  # --- engine demo job(卡 #5;#10 一次性 ingest + 串流 backtest)--------------
+  # profile=demo:預設 `up` 不啟動;用 `docker compose --profile demo run --rm engine`
+  # 或 `up engine` 觸發。跑完寫好 stream + LATEST_STREAM_KEY 後結束。
+  engine:
+    build:
+      context: .
+      dockerfile: infra/docker/engine/Dockerfile
+    container_name: jimq-engine-demo
+    profiles: ["demo"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JIMQ_CATALOG_PATH: /data/catalog
+      INGEST_START: ${INGEST_START:-2024-01-01}
+      INGEST_END: ${INGEST_END:-2024-01-02}
+      EMA_FAST: ${EMA_FAST:-3}
+      EMA_SLOW: ${EMA_SLOW:-8}
+      JIMQ_SYNTHETIC: ${JIMQ_SYNTHETIC:-0}
+    volumes:
+      - catalog-data:/data/catalog
+    restart: "no"
+
 volumes:
   redis-data:
   postgres-data:
+  catalog-data:

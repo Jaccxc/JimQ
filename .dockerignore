@@ -1,0 +1,14 @@
+# 卡 #10 build context 瘦身(repo 根 = api/engine build context)。
+.git
+.venv
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+node_modules
+web/node_modules
+web/dist
+data/catalog
+.env
+.env.afk
+*.png
+docs
