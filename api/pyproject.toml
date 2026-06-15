@@ -1,11 +1,28 @@
 [project]
 name = "jimq-api"
 version = "0.1.0"
-description = "JimQ FastAPI backend (fork of FastAPI-boilerplate v0.15.0, stripped). S0 placeholder."
+description = "JimQ FastAPI backend — fork of benavlabs/FastAPI-boilerplate v0.15.0 (classic), stripped of user/tier/auth (decisions-confirmed B5)."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "jimq-core",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "sqlalchemy>=2.0.25",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "greenlet>=3.0",
+    "pydantic[email]>=2.6",
+    "pydantic-settings>=2.0",
+    "redis>=5.0",
+    "fastcrud>=0.15.5",
+    "uuid6>=2024.1.12",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
 ]
 
 [tool.uv.sources]

@@ -7,11 +7,13 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "jimq-core",
     "jimq-engine",
+    "jimq-api",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "httpx>=0.27",
 ]
 
 [tool.uv.workspace]
@@ -20,9 +22,10 @@ members = ["libs/jimq_core", "engine", "api"]
 [tool.uv.sources]
 jimq-core = { workspace = true }
 jimq-engine = { workspace = true }
+jimq-api = { workspace = true }
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "engine/tests"]
+testpaths = ["tests", "engine/tests", "api/tests"]
 addopts = "-ra"
 
 [build-system]

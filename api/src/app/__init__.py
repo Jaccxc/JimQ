@@ -1,1 +1,1 @@
-"""jimq-api — FastAPI backend skeleton (S0 placeholder; full fork in a later card)."""
+"""jimq-api — FastAPI backend (stripped fork of benavlabs/FastAPI-boilerplate v0.15.0)."""
