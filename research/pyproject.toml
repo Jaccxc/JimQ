@@ -11,6 +11,13 @@ dependencies = [
     "mlflow>=2.12",
     "polars>=0.20",
     "jimq-core",
+    # research is the experiment-orchestration layer: it reads the shared
+    # ParquetDataCatalog (bars + funding) via jimq_engine's catalog helpers and
+    # drives nautilus backtests. Both pulled in as editable/pinned deps so the
+    # dataset builder reuses the engine's catalog query code (single source of
+    # truth) rather than re-reading raw parquet (anti train/serve skew).
+    "jimq-engine",
+    "nautilus_trader==1.228.0",
 ]
 
 [dependency-groups]
@@ -23,6 +30,7 @@ dev = [
 # intentionally NOT a member of the root uv workspace.
 [tool.uv.sources]
 jimq-core = { path = "../libs/jimq_core", editable = true }
+jimq-engine = { path = "../engine", editable = true }
 
 # CPU-only torch for this card: import-level smoke only. GPU/CUDA wheels are
 # deferred until actual training needs them (avoids huge CUDA downloads).
