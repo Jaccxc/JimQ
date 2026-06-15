@@ -38,3 +38,6 @@ data/
 # 實驗追蹤
 mlruns/
 wandb/
+
+# AFK 本機憑證(不入 git)
+.env.afk
