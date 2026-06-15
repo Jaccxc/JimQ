@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / web
+node_modules/
+dist/
+.vite/
+
+# 本地資料與模型(大檔,不入 git)
+data/
+!data/.gitkeep
+*.parquet
+*.feather
+*.pt
+*.onnx
+*.ckpt
+
+# 環境與機密
+.env
+.env.local
+*.key
+*.pem
+
+# 編輯器 / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# 實驗追蹤
+mlruns/
+wandb/
