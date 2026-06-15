@@ -13,11 +13,11 @@ import { useOrdersStore } from '@/stores/orders'
 import { useFillsStore } from '@/stores/fills'
 import { usePnlStore } from '@/stores/pnl'
 import { useConnectionStore } from '@/stores/connection'
-import type { WsMessage } from '@/types/contract'
+import type { StreamEnvelope } from '@/types/contract'
 
 beforeEach(() => setActivePinia(createPinia()))
 
-function barEnv(seq: number, time: number): WsMessage {
+function barEnv(seq: number, time: number): StreamEnvelope {
   return {
     channel: 'bars',
     seq,
