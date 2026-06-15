@@ -36,6 +36,16 @@ except Exception:
   i=$((i+1)); [ "$i" -ge 30 ] && { echo "[engine] redis 未就緒" >&2; exit 1; }; sleep 2
 done
 
+# 清空 bus DB0(只有本機本棧、demo 完全擁有)讓每次 demo 從乾淨 stream/group 開始,
+# 避免上一輪殘留 stream key 與已消費的 consumer group 干擾(可重現性)。
+echo "[engine] flushing bus DB0(clean slate for reproducible demo)..."
+python -c "
+import os, redis
+r = redis.Redis(host=os.environ.get('REDIS_HOST','redis'), port=int(os.environ.get('REDIS_PORT','6379')), db=0)
+r.flushdb()
+print('[engine] bus DB0 flushed')
+"
+
 if [ "${JIMQ_SYNTHETIC:-0}" = "1" ]; then
   echo "[engine] JIMQ_SYNTHETIC=1 — 合成黃金交叉 backtest(離線可重現)"
   exec python scripts/run_streaming_backtest.py --synthetic --keep --publish-key \
