@@ -10,5 +10,20 @@ from jimq_research.training.batch_backtest import (
     run_single,
     summarize_engine,
 )
+from jimq_research.training.store import (
+    delete_run_group,
+    local_engine_url,
+    persist_summaries,
+    query_runs,
+)
 
-__all__ = ["expand_grid", "run_grid", "run_single", "summarize_engine"]
+__all__ = [
+    "expand_grid",
+    "run_grid",
+    "run_single",
+    "summarize_engine",
+    "delete_run_group",
+    "local_engine_url",
+    "persist_summaries",
+    "query_runs",
+]
