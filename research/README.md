@@ -91,6 +91,33 @@ export MLFLOW_TRACKING_URI=http://localhost:5000
 uv run python -m jimq_research.training.run_grid_demo --fast 3 5 --slow 8 13
 ```
 
+## End-to-end research demo (#18)
+
+`training/run_research_demo.py` stitches the **full research loop** end-to-end,
+reusing every existing component (no rebuilt wheels):
+dataset builder (#14) → train a clearly-labelled **stub** baseline (#18) →
+register into the Postgres `model_registry` + save the artifact under
+`data/models/<name>/<version>/` (#17) → run a **model-driven backtest** through
+the generic `jimq_engine.strategies.ModelInferenceStrategy` (#4 engine) → log the
+result as an MLflow run (#16).
+
+The stub (LogisticRegression) only proves the **plumbing** is wired — it has no
+alpha. `export/baseline.py` wraps any estimator into a `predict(features)->signal`
+object, and `training/model_registry.py` registers metadata via SQLAlchemy Core
+(app-level, schema owned by `api`'s hand-written Alembic). The strategy is
+**model-type-agnostic** (C8): it loads any object with `predict` and computes
+features in `on_bar` with the *same* `jimq_core.features` code as the dataset
+builder (no train/serve skew).
+
+```bash
+cd research
+uv run python -m jimq_research.training.run_research_demo
+```
+
+Full step-by-step (from zero to seeing the loop's results) + the **user
+replacement points** (real model / features / labels / reward) are in
+`docs/runbooks/20260616-research-demo.md`.
+
 ## Smoke test
 
 ```bash
