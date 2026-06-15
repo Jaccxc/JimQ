@@ -32,9 +32,6 @@ from jimq_core.schemas import bar_event_data
 
 logger = logging.getLogger(__name__)
 
-# 奈秒 → 秒(與 BarDTO 一致)。
-_NS_PER_SEC = 1_000_000_000
-
 # topic 前綴 → 對外 channel 名稱。順序不重要(前綴互斥)。
 _TOPIC_PREFIX_TO_CHANNEL: tuple[tuple[str, str], ...] = (
     ("data.bars.", "bars"),
