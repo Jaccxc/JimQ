@@ -21,6 +21,7 @@ from nautilus_trader.model.enums import AccountType, OmsType
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Money
+from nautilus_trader.trading.strategy import Strategy
 
 from jimq_engine.strategies.ema_cross import EMACross, EMACrossConfig
 
@@ -36,18 +37,20 @@ def default_fill_model(random_seed: int = 42) -> FillModel:
     )
 
 
-def build_engine(
+def build_engine_with_strategy(
     instrument: Instrument,
     bars: Sequence[Bar],
-    config: EMACrossConfig,
+    strategy: Strategy,
     *,
     starting_usdt: Decimal = Decimal("1_000_000"),
     leverage: Decimal = Decimal("10"),
     random_seed: int = 42,
 ) -> BacktestEngine:
-    """組裝並回傳已 run 完的 BacktestEngine。
+    """組裝並回傳已 run 完的 BacktestEngine —— 策略類型無關(C8 可插拔)。
 
-    venue:NETTING OMS + MARGIN account + USDT starting balance + FillModel。
+    接受任意已實例化的 Nautilus ``Strategy``(規則式 EMA、模型驅動推論策略…),
+    組好 venue(NETTING OMS + MARGIN account + USDT 起始餘額 + 固定種子 FillModel)
+    後跑完回傳。``build_engine`` 是它對 EMA 策略的便利包裝。
     """
     engine_config = BacktestEngineConfig(
         trader_id="BACKTESTER-001",
@@ -65,6 +68,29 @@ def build_engine(
     )
     engine.add_instrument(instrument)
     engine.add_data(list(bars))
-    engine.add_strategy(EMACross(config=config))
+    engine.add_strategy(strategy)
     engine.run()
     return engine
+
+
+def build_engine(
+    instrument: Instrument,
+    bars: Sequence[Bar],
+    config: EMACrossConfig,
+    *,
+    starting_usdt: Decimal = Decimal("1_000_000"),
+    leverage: Decimal = Decimal("10"),
+    random_seed: int = 42,
+) -> BacktestEngine:
+    """組裝並回傳已 run 完的 BacktestEngine(EMA 策略便利包裝)。
+
+    venue:NETTING OMS + MARGIN account + USDT starting balance + FillModel。
+    """
+    return build_engine_with_strategy(
+        instrument,
+        bars,
+        EMACross(config=config),
+        starting_usdt=starting_usdt,
+        leverage=leverage,
+        random_seed=random_seed,
+    )
