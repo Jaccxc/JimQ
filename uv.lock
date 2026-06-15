@@ -276,6 +276,7 @@ dependencies = [
     { name = "fastcrud" },
     { name = "greenlet" },
     { name = "jimq-core" },
+    { name = "nautilus-trader" },
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
     { name = "redis" },
@@ -298,6 +299,7 @@ requires-dist = [
     { name = "fastcrud", specifier = ">=0.15.5" },
     { name = "greenlet", specifier = ">=3.0" },
     { name = "jimq-core", editable = "libs/jimq_core" },
+    { name = "nautilus-trader", specifier = "==1.228.0" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.6" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "redis", specifier = ">=5.0" },
@@ -316,6 +318,12 @@ dev = [
 name = "jimq-core"
 version = "0.1.0"
 source = { editable = "libs/jimq_core" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.6" }]
 
 [[package]]
 name = "jimq-engine"
