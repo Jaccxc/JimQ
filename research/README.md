@@ -56,6 +56,41 @@ cd research
 uv run python -m jimq_research.training.run_grid_demo --fast 3 5 --slow 8 13
 ```
 
+## MLflow experiment tracking (#16)
+
+`training/tracking.py` is a thin wrapper over MLflow. A `track_run` context
+manager opens a run and logs params on entry; `log_metrics` / `log_params` /
+`log_artifacts` log inside the block. `log_summary_to_mlflow` /
+`track_summaries` map each `BacktestRunSummary` to one MLflow run
+(params = strategy params + run identity, metrics = performance), and the batch
+runner records every grid run automatically.
+
+Tracking URI resolution: explicit arg > `MLFLOW_TRACKING_URI` env >
+local sqlite fallback (`data/mlflow/mlflow.db`). MLflow 3.x disabled the file
+tracking store, so the backend is always sqlite (local) or the docker server
+(`http://localhost:5000`). Tests use a temp sqlite backend — fully offline,
+no docker required.
+
+```python
+from jimq_research.training import track_run, log_metrics, track_summaries
+
+with track_run("backtest", {"fast_period": 3, "slow_period": 8}) as run_id:
+    log_metrics({"total_return": 0.012, "sharpe": 1.25})
+
+# or record a whole grid of backtest summaries, one MLflow run each:
+track_summaries(summaries, experiment="backtest")
+```
+
+Start the docker MLflow server (UI + REST API at http://localhost:5000;
+sqlite backend store + proxied local artifact volume, localhost-only):
+
+```bash
+docker compose --profile research up -d mlflow
+# then point research at it:
+export MLFLOW_TRACKING_URI=http://localhost:5000
+uv run python -m jimq_research.training.run_grid_demo --fast 3 5 --slow 8 13
+```
+
 ## Smoke test
 
 ```bash

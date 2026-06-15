@@ -37,6 +37,37 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  # --- MLflow 實驗追蹤(卡 #16)-----------------------------------------------
+  # localhost-only(鐵律 4)。backend store = sqlite 檔(掛在具名 volume 持久化),
+  # artifact root = 容器內本地目錄(具名 volume),透過 --serve-artifacts 代理上傳,
+  # 故 host 上的 research client 只需指向 http://localhost:5000,無須共享檔案系統路徑。
+  # MLflow 3.x 已停用 file tracking store,一律用 sqlite backend。
+  # profile=research:預設 `up` 不啟動;以
+  # `docker compose --profile research up -d mlflow` 啟動。port 5000 未占用。
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.13.0
+    container_name: jimq-mlflow
+    profiles: ["research"]
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/db/mlflow.db
+      --serve-artifacts
+      --artifacts-destination /mlflow/artifacts
+    volumes:
+      - mlflow-db:/mlflow/db
+      - mlflow-artifacts:/mlflow/artifacts
+    ports:
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
   # --- FastAPI 後端(卡 #4/#7/#8;#10 容器化)---------------------------------
   # 啟動先 alembic upgrade head(鐵律 2)再 uvicorn。讀 bus DB0(@latest 解析
   # engine 寫入的 stream key)→ consumer → hub → WS。REST /bars 讀共享 catalog volume。
@@ -111,3 +142,5 @@ volumes:
   redis-data:
   postgres-data:
   catalog-data:
+  mlflow-db:
+  mlflow-artifacts:
