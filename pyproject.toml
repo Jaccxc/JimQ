@@ -22,7 +22,7 @@ jimq-core = { workspace = true }
 jimq-engine = { workspace = true }
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "engine/tests"]
 addopts = "-ra"
 
 [build-system]
