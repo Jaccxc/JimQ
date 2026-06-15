@@ -71,6 +71,10 @@ class BacktestRun(Base):
     start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
+    # --- grid cohort tag: groups all runs from one param-grid batch (鐵律 12: ---
+    # plain indexed column, no FK; NULL for single runs). #15.
+    run_group: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
+
     # --- strategy parameters: genuinely unstructured payload -> JSONB (鐵律 10) ---
     params: Mapped[dict] = mapped_column(JSONB, default_factory=dict)
 
