@@ -15,9 +15,11 @@ nautilus_trader,僅在型別註解使用 ``TYPE_CHECKING`` 匯入(實際呼叫�
 
 from __future__ import annotations
 
+from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:  # pragma: no cover - 僅供型別檢查,執行期不匯入 nautilus
     from nautilus_trader.model.data import Bar
@@ -87,3 +89,36 @@ class StreamEnvelope(BaseModel):
     channel: Channel
     seq: int
     data: dict[str, Any]
+
+
+class BacktestRunSummary(BaseModel):
+    """一次 backtest run 的摘要(卡 #15;engine/research/api 共用契約)。
+
+    攜帶 run 身份(策略 / instrument / bar_type / timeframe / 區間 / 策略參數)
+    與結果指標(報酬 / Sharpe / 最大回撤 / 成交筆數 / 最終餘額)。批量 backtest
+    runner 對參數網格每組產出一個 summary,持久化到 Postgres ``backtest_run``。
+
+    - 金額 / 比率以 ``Decimal`` 保留精度,對齊 DB 端 ``NUMERIC``(鐵律 10);
+    - ``params`` 為本質非結構化的策略參數 payload(對齊 DB ``params`` JSONB);
+    - ``run_group`` 標記同一次網格批跑的多筆 run,供查詢 / 比較(單跑為 ``None``)。
+
+    純 Pydantic,不依賴 nautilus 或 sqlalchemy —— 故可放在共用的 jimq_core。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    strategy_name: str
+    instrument_id: str
+    bar_type: str
+    timeframe: str
+    start_time: datetime
+    end_time: datetime
+    params: dict[str, Any] = Field(default_factory=dict)
+
+    total_return: Decimal | None = None
+    sharpe: Decimal | None = None
+    max_drawdown: Decimal | None = None
+    num_trades: int | None = None
+    final_balance: Decimal | None = None
+
+    run_group: str | None = None
