@@ -15,6 +15,7 @@ bar/order/fill/position/account 事件序列化(msgpack)落地**本機 Redis Str
 from __future__ import annotations
 
 import argparse
+import os
 from collections import Counter
 from decimal import Decimal
 
@@ -36,6 +37,17 @@ from jimq_core.constants import REDIS_BUS_DB
 
 _BASE_MS = 1_700_000_000_000
 
+# engine 把實際 stream key 寫到這個已知 Redis key,供 API 在 @latest 模式解析
+# (對齊 api/src/app/ws/app_factory.py 的 LATEST_STREAM_KEY)。
+LATEST_STREAM_KEY = "jimq:latest_stream_key"
+
+
+def _redis_host_port() -> tuple[str, int]:
+    """bus Redis host/port,可由 REDIS_HOST / REDIS_PORT 覆寫(compose 內用服務名)。"""
+    host = os.environ.get("REDIS_HOST", "localhost")
+    port = int(os.environ.get("REDIS_PORT", "6379"))
+    return host, port
+
 
 def _synthetic_klines() -> list[list]:
     down = [40000.0 - i * 20 for i in range(15)]
@@ -53,9 +65,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="streaming EMA backtest demo")
     parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--keep", action="store_true", help="保留 stream key(預設清掉)")
+    parser.add_argument(
+        "--publish-key",
+        action="store_true",
+        help=f"把實際 stream key 寫到 Redis 的 {LATEST_STREAM_KEY}(供 API @latest 解析);"
+        "通常與 --keep 並用(全棧 demo)",
+    )
     parser.add_argument("--fast", type=int, default=3)
     parser.add_argument("--slow", type=int, default=8)
     args = parser.parse_args()
+
+    redis_host, redis_port = _redis_host_port()
 
     instrument = btcusdt_perp_binance()
     catalog = open_catalog()
@@ -77,14 +97,16 @@ def main() -> None:
         tp_pct=Decimal("0.02"),
     )
 
-    engine = build_streaming_engine(instrument, bars, config)
+    engine = build_streaming_engine(
+        instrument, bars, config, redis_host=redis_host, redis_port=redis_port
+    )
     key = stream_key_for(engine)
 
     import time
 
     import redis
 
-    client = redis.Redis(host="localhost", port=6379, db=REDIS_BUS_DB)
+    client = redis.Redis(host=redis_host, port=redis_port, db=REDIS_BUS_DB)
     for _ in range(50):
         if client.exists(key) and client.xlen(key) > 0:
             break
@@ -92,8 +114,12 @@ def main() -> None:
 
     xlen = client.xlen(key)
     print(f"stream key : {key}")
-    print(f"REDIS_BUS_DB: {REDIS_BUS_DB}")
+    print(f"REDIS_BUS_DB: {REDIS_BUS_DB} (host={redis_host}:{redis_port})")
     print(f"XLEN       : {xlen}")
+
+    if args.publish_key:
+        client.set(LATEST_STREAM_KEY, key)
+        print(f"published key -> {LATEST_STREAM_KEY}(API @latest 可解析)")
 
     types: Counter[str] = Counter()
     for _id, fields in client.xrange(key):
@@ -110,6 +136,8 @@ def main() -> None:
 
     if not args.keep:
         client.delete(key)
+        if args.publish_key:
+            client.delete(LATEST_STREAM_KEY)
         print(f"\n已清掉 stream key:{key}(--keep 可保留)")
     client.close()
     engine.dispose()

@@ -15,8 +15,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+import os
+from collections.abc import AsyncGenerator, Mapping
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI
@@ -30,13 +32,63 @@ from .stream import register_ws
 # Nautilus bus Redis(localhost DB0)。
 DEFAULT_REDIS_URL = f"redis://localhost:6379/{REDIS_BUS_DB}"
 
+# engine 把實際 stream key(帶隨機 instance_id)寫到這個已知 Redis key,供
+# API 端在 ``JIMQ_STREAM_KEY=@latest`` 時解析(卡 #10 全棧整合)。
+LATEST_STREAM_KEY = "jimq:latest_stream_key"
+# ``JIMQ_STREAM_KEY`` 的 sentinel:從 LATEST_STREAM_KEY 讀實際 key。
+LATEST_SENTINEL = "@latest"
+
+
+def bus_redis_url(env: Mapping[str, str] | None = None) -> str:
+    """Nautilus bus(DB0)Redis URL,可由 ``REDIS_HOST`` / ``REDIS_PORT`` 覆寫。
+
+    compose 內設為服務名(``redis``);未設時維持既有 localhost 開發流程。
+    """
+    env = os.environ if env is None else env
+    host = env.get("REDIS_HOST", "localhost")
+    port = env.get("REDIS_PORT", "6379")
+    return f"redis://{host}:{port}/{REDIS_BUS_DB}"
+
+
+def _as_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    return value.decode() if isinstance(value, (bytes, bytearray)) else str(value)
+
+
+def resolve_stream_key(
+    env: Mapping[str, str] | None = None, *, client: Any = None
+) -> str | None:
+    """解析 API 要消費的 Nautilus stream key。
+
+    - ``JIMQ_STREAM_KEY`` 未設 → None(WS 端點仍可用,等灌入)。
+    - 字面值 → 直接用該 key。
+    - sentinel ``@latest`` → 從 Redis 的 ``LATEST_STREAM_KEY`` 讀 engine 最近一次
+      backtest 寫入的實際 key;讀不到回 None。
+    """
+    env = os.environ if env is None else env
+    configured = env.get("JIMQ_STREAM_KEY")
+    if not configured:
+        return None
+    if configured != LATEST_SENTINEL:
+        return configured
+    if client is None:
+        return None
+    return _as_str(client.get(LATEST_STREAM_KEY))
+
 
 def make_streaming_lifespan(
     *,
     stream_key: str,
-    redis_url: str = DEFAULT_REDIS_URL,
+    redis_url: str | None = None,
 ):
-    """建一個啟動 hub + Redis consumer task 的 lifespan。"""
+    """建一個啟動 hub + Redis consumer task 的 lifespan。
+
+    ``redis_url`` 預設讀環境變數(``REDIS_HOST`` / ``REDIS_PORT``;compose 內為
+    服務名),維持 localhost 開發流程。
+    """
+    if redis_url is None:
+        redis_url = bus_redis_url()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -65,7 +117,7 @@ def make_streaming_lifespan(
 def build_streaming_app(
     *,
     stream_key: str,
-    redis_url: str = DEFAULT_REDIS_URL,
+    redis_url: str | None = None,
 ) -> FastAPI:
     """建一個只含 WS gateway + 串流 lifespan 的精簡 app(e2e / 部署用)。"""
     app = FastAPI(lifespan=make_streaming_lifespan(stream_key=stream_key, redis_url=redis_url))

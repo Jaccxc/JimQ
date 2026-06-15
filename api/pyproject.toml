@@ -8,7 +8,8 @@ dependencies = [
     "jimq-core",
     "nautilus_trader==1.228.0",
     "fastapi>=0.115",
-    "uvicorn>=0.30",
+    # [standard] 帶 websockets/wsproto:WS gateway(#7)需要,否則 /ws 升級回 404。
+    "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0.25",
     "asyncpg>=0.29",
     "alembic>=1.13",

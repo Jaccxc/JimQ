@@ -36,8 +36,18 @@ BAR_TYPE_5M = BarType.from_str("BTCUSDT-PERP.BINANCE-5-MINUTE-LAST-EXTERNAL")
 
 
 def open_catalog(path: str | os.PathLike | None = None) -> ParquetDataCatalog:
-    """開啟(必要時建立)本地 ParquetDataCatalog。"""
-    catalog_path = Path(path) if path is not None else DEFAULT_CATALOG_PATH
+    """開啟(必要時建立)本地 ParquetDataCatalog。
+
+    路徑優先序:顯式 ``path`` > ``JIMQ_CATALOG_PATH`` 環境變數 > repo 預設
+    ``data/catalog``。env 覆寫讓全棧容器(卡 #10)engine 與 api 指向同一份共享
+    catalog volume(``/data/catalog``),不破壞既有本機開發預設。
+    """
+    if path is not None:
+        catalog_path = Path(path)
+    elif os.environ.get("JIMQ_CATALOG_PATH"):
+        catalog_path = Path(os.environ["JIMQ_CATALOG_PATH"])
+    else:
+        catalog_path = DEFAULT_CATALOG_PATH
     catalog_path.mkdir(parents=True, exist_ok=True)
     return ParquetDataCatalog(path=str(catalog_path))
 

@@ -136,13 +136,19 @@ async def run_consumer(
 
     ``publish`` 為協程函式 ``async (envelope) -> None``(通常是 ``hub.publish``)。
     讀 localhost DB0 bus;``stop_event`` set 時優雅退出。
+
+    啟動序(卡 #10):先以 ``id="0"`` 排空本 consumer 名下尚未 ack 的 **backlog**
+    (全棧 demo 中 engine 一次性 job 先寫完整段 stream,API 才啟動;只讀 ``>`` 會
+    漏掉全部歷史),排空後切換到 ``>`` 跟 live。
     """
     normalizer = StreamNormalizer()
     await _ensure_group(client, stream_key, group)
+    # 啟動先排空 backlog(id="0" 讀本 consumer 的 pending/未 ack 歷史),空了再轉 live。
+    read_id = "0"
     while stop_event is None or not stop_event.is_set():
         try:
             resp: Sequence[Any] = await client.xreadgroup(
-                group, consumer, {stream_key: ">"}, count=count, block=block_ms
+                group, consumer, {stream_key: read_id}, count=count, block=block_ms
             )
         except asyncio.CancelledError:
             raise
@@ -150,7 +156,10 @@ async def run_consumer(
             logger.exception("XREADGROUP 失敗;短暫退避後重試")
             await asyncio.sleep(0.5)
             continue
-        if not resp:
+        # backlog 排空(id="0" 回空)→ 切到 live(">")。
+        if not resp or all(not entries for _key, entries in resp):
+            if read_id == "0":
+                read_id = ">"
             continue
         for _key, entries in resp:
             for entry in entries:
