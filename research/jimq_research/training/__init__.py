@@ -20,8 +20,10 @@ from jimq_research.training.tracking import (
     log_artifacts,
     log_metrics,
     log_params,
+    log_summary_to_mlflow,
     resolve_tracking_uri,
     track_run,
+    track_summaries,
 )
 
 __all__ = [
@@ -37,5 +39,7 @@ __all__ = [
     "log_metrics",
     "log_params",
     "log_artifacts",
+    "log_summary_to_mlflow",
+    "track_summaries",
     "resolve_tracking_uri",
 ]

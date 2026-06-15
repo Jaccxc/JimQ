@@ -23,6 +23,25 @@ from typing import Any, Iterator, Mapping, Sequence
 
 import mlflow
 
+from jimq_core.schemas import BacktestRunSummary
+
+# backtest summary 的績效欄位 → MLflow metric。None 值跳過(MLflow 只收數值)。
+_SUMMARY_METRIC_FIELDS = (
+    "total_return",
+    "sharpe",
+    "max_drawdown",
+    "num_trades",
+    "final_balance",
+)
+# 非數值的 run 身份欄位 → MLflow param,連同 ``params`` 一起記錄,方便比較 / 過濾。
+_SUMMARY_PARAM_FIELDS = (
+    "strategy_name",
+    "instrument_id",
+    "bar_type",
+    "timeframe",
+    "run_group",
+)
+
 # 本地預設 backend(對齊 docker 服務:sqlite backend store + 本地 artifact 目錄)。
 _DEFAULT_DATA_DIR = Path(
     os.environ.get("JIMQ_MLFLOW_DIR", "data/mlflow")
@@ -113,3 +132,67 @@ def log_artifacts(
     mlflow.set_tracking_uri(resolve_tracking_uri(tracking_uri))
     for p in paths:
         mlflow.log_artifact(p, artifact_path=artifact_path)
+
+
+def _summary_params(summary: BacktestRunSummary) -> dict[str, Any]:
+    """策略參數(``params``)+ 非數值 run 身份欄位,組成 MLflow params。"""
+    out: dict[str, Any] = dict(summary.params)
+    for field in _SUMMARY_PARAM_FIELDS:
+        value = getattr(summary, field)
+        if value is not None:
+            out[field] = value
+    return out
+
+
+def _summary_metrics(summary: BacktestRunSummary) -> dict[str, float]:
+    """績效欄位 → MLflow metrics(None 跳過,Decimal/int 轉 float)。"""
+    out: dict[str, float] = {}
+    for field in _SUMMARY_METRIC_FIELDS:
+        value = getattr(summary, field)
+        if value is not None:
+            out[field] = float(value)
+    return out
+
+
+def log_summary_to_mlflow(
+    summary: BacktestRunSummary,
+    *,
+    experiment: str = "backtest",
+    tracking_uri: str | None = None,
+    artifact_location: str | None = None,
+    run_name: str | None = None,
+) -> str:
+    """把一個 ``BacktestRunSummary`` 記錄成單一 MLflow run,回傳 run_id。
+
+    params = 策略參數 + run 身份(策略 / instrument / bar_type / timeframe / run_group);
+    metrics = 績效(報酬 / Sharpe / 回撤 / 成交數 / 最終餘額)。整合點:批量 backtest
+    runner 跑完每組參數後呼叫此函式記錄一個 run。
+    """
+    with track_run(
+        experiment,
+        _summary_params(summary),
+        tracking_uri=tracking_uri,
+        artifact_location=artifact_location,
+        run_name=run_name,
+    ) as run_id:
+        log_metrics(_summary_metrics(summary), tracking_uri=tracking_uri)
+    return run_id
+
+
+def track_summaries(
+    summaries: Sequence[BacktestRunSummary],
+    *,
+    experiment: str = "backtest",
+    tracking_uri: str | None = None,
+    artifact_location: str | None = None,
+) -> list[str]:
+    """把一批 backtest summary 各記錄成一個 MLflow run,回傳 run_id 清單。"""
+    return [
+        log_summary_to_mlflow(
+            s,
+            experiment=experiment,
+            tracking_uri=tracking_uri,
+            artifact_location=artifact_location,
+        )
+        for s in summaries
+    ]
