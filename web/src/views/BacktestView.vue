@@ -25,7 +25,8 @@ const CHANNELS = ['bars', 'orders', 'fills', 'positions', 'pnl']
 const runStore = useBacktestRunStore()
 const settings = useChartSettingsStore()
 const appMode = useAppModeStore()
-const socket = useTradeSocket({ channels: CHANNELS })
+// 卡 A:Backtest 即時串流圖訂 scope=backtest → 與 Live 分頁互不污染。
+const socket = useTradeSocket({ channels: CHANNELS, scope: 'backtest' })
 const chartData = useChartData({ socket })
 
 async function onSwitch(sel: { symbol: string; timeframe: string }) {

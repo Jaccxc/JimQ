@@ -24,6 +24,8 @@ import time
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
+from jimq_core.constants import STREAM_SCOPE_LIVE
+
 from ..services.hub import Hub
 
 # 預設心跳間隔(秒)。
@@ -92,10 +94,25 @@ async def _stream(ws: WebSocket, hub: Hub) -> None:
         hub.unsubscribe(sub)
 
 
+def _resolve_hub(ws: WebSocket) -> Hub:
+    """依 ``scope`` query 取對應 scope 的 hub(卡 A:live/backtest 資料源隔離)。
+
+    - ``app.state.scoped_hubs[scope]`` 存在 → 用該 scope hub(live / backtest)。
+    - 未帶 scope / 未知 scope / 無 scoped_hubs(單 scope 部署)→ 退回
+      ``app.state.hub``(現狀相容)。
+    """
+    state = ws.app.state
+    scope = ws.query_params.get("scope", STREAM_SCOPE_LIVE)
+    scoped = getattr(state, "scoped_hubs", None)
+    if scoped is not None and scope in scoped:
+        return scoped[scope]
+    return state.hub
+
+
 def register_ws(app: FastAPI) -> None:
-    """把 WS gateway 掛到 FastAPI app(讀 ``app.state.hub``)。"""
+    """把 WS gateway 掛到 FastAPI app(依 ``scope`` query 路由到對應 hub)。"""
 
     @app.websocket(WS_PATH)
     async def stream_endpoint(ws: WebSocket) -> None:  # noqa: D401
-        hub: Hub = ws.app.state.hub
+        hub = _resolve_hub(ws)
         await _stream(ws, hub)

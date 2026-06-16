@@ -1,8 +1,9 @@
 """卡 #27 (P2-S1) — Binance testnet **live 資料節點** entrypoint(可起停)。
 
 連 Binance USDT-M Futures **testnet**,訂閱 BTCUSDT-PERP 即時 bar,把事件序列化
-落地**本機 Redis Streams**(DB0),並把實際 stream key 發布到
-``jimq:latest_stream_key``(供 API ``@latest`` 解析、前端 Live 頁即時訂閱)。
+落地**本機 Redis Streams**(DB0),並把實際 stream key 發布到 **live scope**
+latest-key ``jimq:live:latest_stream_key``(卡 A;供 API live scope supervisor
+解析、前端 Live 頁即時訂閱,與 backtest 隔離)。
 mode badge 依此判定 LIVE-TESTNET(節點在跑 = live 來源)。
 
 用法:
@@ -23,7 +24,7 @@ import signal
 import redis as redis_sync
 from dotenv import load_dotenv
 
-from jimq_core.constants import REDIS_BUS_DB
+from jimq_core.constants import LIVE_LATEST_STREAM_KEY, REDIS_BUS_DB
 
 from nautilus_trader.adapters.binance import BinanceLiveDataClientFactory
 from nautilus_trader.live.node import TradingNode
@@ -35,9 +36,9 @@ from jimq_engine.nodes.live import (
     credentials_from_env,
 )
 
-# engine 把實際事件 stream key 寫到這個已知 Redis key,供 API 在 @latest 模式解析
-# (對齊 api/src/app/ws/app_factory.py 的 LATEST_STREAM_KEY)。
-LATEST_STREAM_KEY = "jimq:latest_stream_key"
+# 卡 A:live 資料源把實際 stream key 寫到 **live scope** latest-key,api 的 live
+# scope supervisor 才 watch 它(與 backtest 隔離,Live 圖不混入 backtest)。
+LATEST_STREAM_KEY = LIVE_LATEST_STREAM_KEY
 
 
 def _redis_host_port() -> tuple[str, int]:

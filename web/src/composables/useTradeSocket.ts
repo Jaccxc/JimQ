@@ -21,6 +21,12 @@ export interface TradeSocketOptions {
   url?: string
   /** 要訂的 channel。 */
   channels: string[]
+  /**
+   * 卡 A:資料源 scope(``live`` / ``backtest``)。gateway 依此路由到對應 scope
+   * 的 hub(api 雙 scope 並行消費)→ Live 分頁只收 live 事件,不混入 backtest。
+   * 省略時不帶 scope query,gateway 預設 live(相容)。
+   */
+  scope?: string
   /** 心跳間隔秒(帶給 gateway query)。 */
   heartbeatS?: number
   /** 注入 WebSocket 建構子(測試用)。 */
@@ -52,6 +58,7 @@ export function useTradeSocket(opts: TradeSocketOptions): TradeSocket {
     const conn = useConnectionStore()
     const params = new URLSearchParams()
     params.set('channels', opts.channels.join(','))
+    if (opts.scope) params.set('scope', opts.scope)
     if (opts.heartbeatS != null) params.set('heartbeat_s', String(opts.heartbeatS))
     // 重連補洞:帶上目前已知最後 seq。
     if (conn.lastSeq > 0) params.set('last_seq', String(conn.lastSeq))

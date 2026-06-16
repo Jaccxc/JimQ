@@ -42,3 +42,27 @@ COMMAND_TYPE_KILL: str = "KILL"
 
 # command worker 的 Redis consumer group(多 worker 時 consumer 名可帶 pid)。
 COMMAND_CONSUMER_GROUP: str = "jimq-engine"
+
+# --- Live/Backtest 資料源隔離(卡 A)----------------------------------------
+# 問題:live 與 backtest 共用單一 ``jimq:latest_stream_key`` + 單一熱重載 hub
+# → 一跑 backtest,supervisor 把唯一 hub 切到 backtest stream,backtest 的
+# buy/sell 漏進 Live 圖。解法:**雙 scope 並行消費** —— engine 依資料源把實際
+# stream key 寫到不同的 latest-key;api 每 scope 各自 Hub + ConsumerSupervisor;
+# 前端 WS 帶 scope。以下常數為 engine 發 key 端與 api 消費端的單一真相來源。
+
+# 串流 scope 契約字面值(WS query ``scope`` 與 engine 發 key 端共用)。
+STREAM_SCOPE_LIVE: str = "live"
+STREAM_SCOPE_BACKTEST: str = "backtest"
+
+# 各 scope 的 latest-stream-key(engine 寫、api @latest supervisor 讀)。
+LIVE_LATEST_STREAM_KEY: str = "jimq:live:latest_stream_key"
+BACKTEST_LATEST_STREAM_KEY: str = "jimq:backtest:latest_stream_key"
+
+# 舊的單一 latest-key:保留供相容(舊路徑/手動工具仍可寫),前端改用分流 key。
+LATEST_STREAM_KEY: str = "jimq:latest_stream_key"
+
+# scope 字面值 → 對應 latest-key(api 雙 supervisor 與 engine 共用,避免漂移)。
+SCOPE_LATEST_KEY: dict[str, str] = {
+    STREAM_SCOPE_LIVE: LIVE_LATEST_STREAM_KEY,
+    STREAM_SCOPE_BACKTEST: BACKTEST_LATEST_STREAM_KEY,
+}
