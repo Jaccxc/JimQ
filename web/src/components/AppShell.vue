@@ -1,13 +1,22 @@
 <script setup lang="ts">
 /**
- * 卡 #27 (P2-S1) — tabbed shell(已拍板 IA)。
+ * 卡 #27 (P2-S1):tabbed shell 作為應用外殼。
+ * 改版 S2:header/shell 玻璃化(L3 toolbar)。
  *
- * header:nav [Live][Backtest][Research] 分頁籤 + mode badge(BACKTEST /
- * LIVE-TESTNET)+ 全域 KILL 按鈕(本卡 placeholder/disabled,真功能待 P2-S3)
- * + WS 連線狀態。內容區 <RouterView/> 由 vue-router 切換。
+ * header:brand「JimQ」+ nav [Live][Backtest][Research] 分頁籤(active = Apple 藍底
+ * + 高光)+ mode badge(BACKTEST / LIVE-TESTNET)+ WS 連線狀態 glass pill + 全域
+ * KILL 按鈕(危險高對比玻璃)。內容區 <RouterView/> 由 vue-router 切換。
+ *
+ * 換皮原則(契約):保留所有互動/store 綁定/data-testid 不變,只換外觀 →
+ *   - brand/tabs/badge/連線狀態/KILL 行為與卡 #24/#27 一致;
+ *   - header 改吃 theme.css token + GlassToolbar(L3),移除硬編色;
+ *   - router-view 容器深色玻璃工作區(大面積背景禁 backdrop-filter,用實心 bg token)。
  */
 import { inject } from 'vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
+import { GlassToolbar } from '@/components/ui/glass'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useAppModeStore } from '@/stores/appMode'
 import { useStrategyControl, type ControlApi } from '@/composables/useStrategyControl'
 
@@ -25,7 +34,7 @@ async function onKill() {
 
 <template>
   <div class="shell">
-    <header class="shell-header">
+    <GlassToolbar as="header" class="shell-header">
       <div class="brand">JimQ</div>
       <nav class="tabs">
         <RouterLink to="/live" class="tab">Live</RouterLink>
@@ -33,26 +42,27 @@ async function onKill() {
         <RouterLink to="/research" class="tab">Research</RouterLink>
       </nav>
       <div class="header-right">
-        <span
-          class="mode-badge"
-          :class="appMode.isLive ? 'badge-live' : 'badge-backtest'"
+        <Badge
+          :variant="appMode.isLive ? 'default' : 'secondary'"
+          :class="appMode.isLive ? 'badge-live' : ''"
           data-testid="mode-badge"
         >
           {{ appMode.badgeLabel }}
-        </span>
+        </Badge>
         <ConnectionStatus />
-        <button
+        <Button
+          variant="destructive"
+          size="sm"
           class="kill"
-          type="button"
           :disabled="control.pending.value"
           title="全域急停 — 停止所有策略 + 取消未成交單(對測試節點)"
           data-testid="kill-switch"
           @click="onKill"
         >
           KILL
-        </button>
+        </Button>
       </div>
-    </header>
+    </GlassToolbar>
     <main class="shell-body">
       <RouterView />
     </main>
@@ -60,33 +70,89 @@ async function onKill() {
 </template>
 
 <style scoped>
-.shell { display: flex; flex-direction: column; height: 100vh; background: #0e1117; }
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  /* 大面積背景禁 backdrop-filter(契約):頁底用實心 bg token。 */
+  background: var(--color-bg);
+}
+
+/* L3 玻璃 header 由 GlassToolbar 提供;此處只調間距/高度。 */
 .shell-header {
-  display: flex; align-items: center; gap: 20px;
-  padding: 6px 14px; background: #11151d; border-bottom: 1px solid #1c2230;
+  gap: calc(var(--spacing) * 5);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
 }
-.brand { font-weight: 700; color: #e5e7eb; font-size: 14px; letter-spacing: 0.04em; }
-.tabs { display: flex; gap: 4px; }
+
+.brand {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--spacing);
+}
+
+/* 分頁籤:沿用 shadcn TabsTrigger 視覺語言(active = Apple 藍底 + 高光)。
+   因導覽走 vue-router(RouterLink),故以 token CSS 還原同款外觀。 */
 .tab {
-  color: #9ca3af; text-decoration: none; font-size: 13px;
-  padding: 6px 12px; border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+  border-radius: var(--radius-sm);
+  transition:
+    background-color var(--duration-fast) var(--ease-glass),
+    color var(--duration-fast) var(--ease-glass);
 }
-.tab:hover { color: #d1d4dc; background: #181d28; }
-.tab.router-link-active { color: #e5e7eb; font-weight: 600; background: #1c2230; }
-.header-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
-.mode-badge {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
-  padding: 3px 8px; border-radius: 4px; text-transform: uppercase;
+
+.tab:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.06);
 }
-.badge-backtest { background: #1f2937; color: #93c5fd; border: 1px solid #334155; }
-.badge-live { background: #422006; color: #fbbf24; border: 1px solid #b45309; }
+
+.tab.router-link-active {
+  color: #fff;
+  font-weight: 600;
+  background: var(--color-accent);
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+}
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 3);
+}
+
+/* LIVE-TESTNET：醒目藍底(default badge 已是 accent/15);此處加強對比讓即時模式一眼可見。 */
+.badge-live {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+/* KILL：危險高對比玻璃。destructive 變體已是跌色實心;此處強化字距/陰影。 */
 .kill {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
-  padding: 4px 10px; border-radius: 4px;
-  background: #3f1d1d; color: #f87171; border: 1px solid #7f1d1d;
-  cursor: pointer;
+  letter-spacing: 0.05em;
+  font-weight: 700;
 }
-.kill:hover:not(:disabled) { background: #7f1d1d; color: #fecaca; }
-.kill:disabled { cursor: not-allowed; opacity: 0.6; }
-.shell-body { flex: 1; min-height: 0; overflow: hidden; }
+
+/* 深色玻璃工作區:router-view 容器。大面積故不疊 backdrop-filter,用次層實心 bg。 */
+.shell-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-bg);
+}
 </style>
