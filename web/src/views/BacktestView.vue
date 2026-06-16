@@ -38,11 +38,13 @@ const props = defineProps<{
 
 const runStore = useBacktestRunStore()
 const appMode = useAppModeStore()
-const market = useMarketStore()
-const fills = useFillsStore()
-// 卡 A:Backtest 即時串流訂 scope=backtest → 與 Live 分頁互不污染。
+// 真 bug 修復:Backtest 串流主圖的 bars/marks 讀寫 'backtest' 命名空間 store,
+// 與 Live 頁('live' 命名空間)完全分開 → 切回 Live 不會看到 backtest 殘留。
+const market = useMarketStore('backtest')
+const fills = useFillsStore('backtest')
+// 卡 A:Backtest 即時串流訂 scope=backtest → WS 路由 + 前端 store 命名空間皆隔離。
 const socket = useTradeSocket({ channels: CHANNELS, scope: 'backtest' })
-const chartData = useChartData({ socket, fetchBars: props.fetchBars })
+const chartData = useChartData({ socket, fetchBars: props.fetchBars, scope: 'backtest' })
 
 // 未選 run 時主圖顯示串流中的 backtest:market store 的 bars + fills marker。
 const liveBars = computed<BarDTO[]>(() => market.bars)

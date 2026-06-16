@@ -21,6 +21,13 @@ import { useChartSettingsStore } from '@/stores/chartSettings'
 import { fillToMarker, orderToPriceLines } from '@/lib/tradeMapping'
 import { emaLineData } from '@/lib/ema'
 
+/**
+ * scope:讀哪個命名空間的串流 state(真 bug 修復)。Live 圖用 'live'(預設),
+ * Backtest 串流主圖用 'backtest' → 兩圖讀不同 market/fills/orders store,互不污染。
+ * chartSettings/EMA 是全域 UI 設定,不分 scope。
+ */
+const props = withDefaults(defineProps<{ scope?: string }>(), { scope: 'live' })
+
 const containerRef = ref<HTMLDivElement | null>(null)
 // 非響應式:chart/series 實例不進 Vue 響應式。
 let controller: ChartController | null = null
@@ -32,9 +39,9 @@ function fitChart() {
   controller?.fit()
 }
 
-const market = useMarketStore()
-const fills = useFillsStore()
-const orders = useOrdersStore()
+const market = useMarketStore(props.scope)
+const fills = useFillsStore(props.scope)
+const orders = useOrdersStore(props.scope)
 const settings = useChartSettingsStore()
 
 /** 依目前設定重算並命令式套用 EMA fast/slow 疊圖(開→set、關→remove)。 */

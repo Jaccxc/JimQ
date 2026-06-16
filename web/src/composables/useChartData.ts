@@ -25,6 +25,11 @@ export interface UseChartDataOptions {
   fetchBars?: (params: FetchBarsParams) => Promise<BarDTO[]>
   /** 串流連線(重訂時 disconnect→connect)。 */
   socket: ChartSocket
+  /**
+   * market store scope 命名空間(真 bug 修復):Live 頁='live'(預設)、
+   * Backtest 頁='backtest' → 歷史/串流 bars 寫進對應命名空間,不污染另一邊。
+   */
+  scope?: string
 }
 
 export interface ChartData {
@@ -35,10 +40,11 @@ export interface ChartData {
 export function useChartData(opts: UseChartDataOptions): ChartData {
   const fetchBars = opts.fetchBars ?? defaultFetchBars
   const socket = opts.socket
+  const scope = opts.scope ?? 'live'
 
   async function reload(): Promise<void> {
     const settings = useChartSettingsStore()
-    const market = useMarketStore()
+    const market = useMarketStore(scope)
     const bars = await fetchBars({
       symbol: settings.symbol,
       timeframe: settings.timeframe,
@@ -55,7 +61,7 @@ export function useChartData(opts: UseChartDataOptions): ChartData {
     settings.setSymbol(sel.symbol)
     settings.setTimeframe(sel.timeframe)
     // 清空舊標的資料,避免短暫殘留/混圖。
-    useMarketStore().setHistory([])
+    useMarketStore(scope).setHistory([])
     await reload()
     // 重訂對應串流(目前 channel 不分標的;重連讓 gateway 重發快照)。
     socket.disconnect()

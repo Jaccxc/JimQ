@@ -27,7 +27,17 @@ import { useFillsStore } from '@/stores/fills'
 import { usePnlStore } from '@/stores/pnl'
 import { useConnectionStore } from '@/stores/connection'
 
-export function dispatchMessage(msg: WsMessage): void {
+/**
+ * 把一則信封路由到**對應 scope 命名空間**的 stores(真 bug 修復)。
+ *
+ * scope 預設 'live'(相容):Live 分頁 socket(scope=live)→ live 命名空間;
+ * Backtest 分頁 socket(scope=backtest)→ backtest 命名空間。兩者讀寫不同 store
+ * 實例 → Live 圖/面板不會看到 backtest 的 bars/marks/部位/PnL/成交,反之亦然。
+ *
+ * connection store 維持**全域單一**:它只承載 WS 連線狀態 + last_seq 補洞游標
+ * (header 顯示用),非串流交易 state;兩個 socket 各自更新無語意衝突。
+ */
+export function dispatchMessage(msg: WsMessage, scope = 'live'): void {
   const conn = useConnectionStore()
 
   if (isLiveMarker(msg)) {
@@ -45,25 +55,25 @@ export function dispatchMessage(msg: WsMessage): void {
 
   switch (msg.channel) {
     case 'bars':
-      useMarketStore().applyBar(data as unknown as BarDTO)
+      useMarketStore(scope).applyBar(data as unknown as BarDTO)
       break
     case 'trades': {
       // 卡 B:逐筆成交 → 聚合到形成中那根 1m K 線(⛔ 純視覺,不碰交易 stores)。
       const t = data as unknown as TradeData
-      useMarketStore().applyTick({ time: t.time, price: t.price })
+      useMarketStore(scope).applyTick({ time: t.time, price: t.price })
       break
     }
     case 'positions':
-      usePositionsStore().upsert(data as unknown as PositionData)
+      usePositionsStore(scope).upsert(data as unknown as PositionData)
       break
     case 'orders':
-      useOrdersStore().add(data as unknown as OrderInitializedData)
+      useOrdersStore(scope).add(data as unknown as OrderInitializedData)
       break
     case 'fills':
-      useFillsStore().add(data as unknown as OrderFilledData)
+      useFillsStore(scope).add(data as unknown as OrderFilledData)
       break
     case 'pnl':
-      usePnlStore().set(data as unknown as AccountStateData)
+      usePnlStore(scope).set(data as unknown as AccountStateData)
       break
   }
 }
