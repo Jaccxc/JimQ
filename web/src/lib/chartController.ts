@@ -86,6 +86,9 @@ export class ChartController {
   private priceLines = new Map<string, IPriceLine>()
   /** EMA line series:id(fast/slow)→ series handle,重用避免重複建。 */
   private emaLines = new Map<string, ISeriesApi<'Line'>>()
+  /** 已套用的最後一根 bar time(單調守衛:丟棄較舊更新,避免 LWC 拋
+   * "Cannot update oldest data";reconnect/切標的重載較舊歷史後由 setHistory 重設)。 */
+  private lastBarTime: number | null = null
   private deps: ChartDeps
 
   constructor(container: HTMLElement, deps: ChartDeps = DEFAULT_DEPS) {
@@ -143,15 +146,21 @@ export class ChartController {
     }
   }
 
-  /** REST 歷史:整批設定。 */
+  /** REST 歷史:整批設定。重設單調游標到歷史尾端 time(重載較舊歷史後可再串流)。 */
   setHistory(bars: BarDTO[]): void {
     this.series.setData(bars.map(toCandle))
     this.chart.timeScale().fitContent()
+    this.lastBarTime = bars.length ? bars[bars.length - 1].time : null
   }
 
-  /** WS 即時:更新最後一根或新增(LWC series.update 語意)。 */
+  /** WS 即時:更新最後一根或新增(LWC series.update 語意)。
+   *
+   * 單調守衛:丟棄嚴格較舊 time 的更新(reconnect/亂序時 LWC 會對較舊 time 拋
+   * "Cannot update oldest data")。同 time 允許(重畫進行中的最後一根)。 */
   updateBar(bar: BarDTO): void {
+    if (this.lastBarTime !== null && bar.time < this.lastBarTime) return
     this.series.update(toCandle(bar))
+    this.lastBarTime = bar.time
   }
 
   /** 進出場箭頭 marker(累積);v5 用 plugin setMarkers。 */
@@ -205,6 +214,8 @@ export class ChartController {
     this.setMarkers([])
     // candlestick 清空(reset 後重 setHistory)。
     this.series.setData([])
+    // 單調游標重設(reset 後將由 setHistory 重新建立)。
+    this.lastBarTime = null
   }
 
   destroy(): void {

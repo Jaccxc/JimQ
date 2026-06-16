@@ -111,6 +111,36 @@ describe('ChartController EMA line series', () => {
   })
 })
 
+describe('ChartController updateBar 單調守衛(reconnect/亂序安全)', () => {
+  it('updateBar 套用新 time / 同 time(重畫最後一根)', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(100, 1)])
+    const candle = fake.series.find((s) => s.kind === 'candle')!
+    ctrl.updateBar(bar(160, 2)) // 新 time
+    ctrl.updateBar(bar(160, 3)) // 同 time 覆寫(最後一根仍可更新)
+    expect(candle.update).toHaveBeenCalledTimes(2)
+  })
+
+  it('updateBar 丟棄嚴格較舊的 time(避免 LWC "update oldest" 拋錯)', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(100, 1), bar(200, 2)])
+    const candle = fake.series.find((s) => s.kind === 'candle')!
+    candle.update.mockClear()
+    ctrl.updateBar(bar(150, 9)) // 比已知最後 time(200)舊 → 丟棄,不呼叫 update
+    expect(candle.update).not.toHaveBeenCalled()
+  })
+
+  it('setHistory 重設單調游標(重載較舊歷史後可再串流)', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(500, 1)]) // 高 time
+    ctrl.setHistory([bar(100, 1)]) // 重載到較舊歷史(切標的/重連)
+    const candle = fake.series.find((s) => s.kind === 'candle')!
+    candle.update.mockClear()
+    ctrl.updateBar(bar(160, 2)) // 相對新歷史(100)是較新 → 應套用
+    expect(candle.update).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('ChartController reset(切換標的安全)', () => {
   it('reset 清 candlestick 資料與所有 EMA line,但不重建 chart', () => {
     const { ctrl, fake } = makeController()
