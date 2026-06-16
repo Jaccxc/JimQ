@@ -8,19 +8,21 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from nautilus_trader.model.currencies import BTC, USDT
+from nautilus_trader.model.currencies import BTC, ETH, USDT
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 from nautilus_trader.model.instruments import CryptoPerpetual
 from nautilus_trader.model.objects import Price, Quantity
 
 # InstrumentId 慣例:BTCUSDT-PERP.BINANCE
 BTCUSDT_PERP_BINANCE_ID = InstrumentId(Symbol("BTCUSDT-PERP"), Venue("BINANCE"))
+ETHUSDT_PERP_BINANCE_ID = InstrumentId(Symbol("ETHUSDT-PERP"), Venue("BINANCE"))
 
 
-# 卡 #20 (W1):symbol 字串 -> instrument factory(command worker 用)。
-# W1 先支援 BTCUSDT-PERP.BINANCE;新增標的在此註冊(預留擴充)。
+# 卡 #20 (W1) / #22 (W3):symbol 字串 -> instrument factory(command worker / ingest 用)。
+# 新增標的在此註冊(預留擴充)。
 _INSTRUMENT_FACTORIES = {
     str(BTCUSDT_PERP_BINANCE_ID): lambda: btcusdt_perp_binance(),
+    str(ETHUSDT_PERP_BINANCE_ID): lambda: ethusdt_perp_binance(),
 }
 
 
@@ -49,6 +51,32 @@ def btcusdt_perp_binance(ts_init: int = 0) -> CryptoPerpetual:
         price_precision=1,
         size_precision=3,
         price_increment=Price.from_str("0.1"),
+        size_increment=Quantity.from_str("0.001"),
+        ts_event=ts_init,
+        ts_init=ts_init,
+        margin_init=Decimal("0"),
+        margin_maint=Decimal("0"),
+        maker_fee=Decimal("0.0002"),
+        taker_fee=Decimal("0.0004"),
+    )
+
+
+def ethusdt_perp_binance(ts_init: int = 0) -> CryptoPerpetual:
+    """建構 Binance USD-M ETHUSDT 永續合約 instrument 定義(卡 #22 多標的示範)。
+
+    精度依 Binance USD-M 期貨規格:price_precision=2(tickSize 0.01)、
+    size_precision=3(stepSize 0.001)。
+    """
+    return CryptoPerpetual(
+        instrument_id=ETHUSDT_PERP_BINANCE_ID,
+        raw_symbol=Symbol("ETHUSDT"),
+        base_currency=ETH,
+        quote_currency=USDT,
+        settlement_currency=USDT,
+        is_inverse=False,
+        price_precision=2,
+        size_precision=3,
+        price_increment=Price.from_str("0.01"),
         size_increment=Quantity.from_str("0.001"),
         ts_event=ts_init,
         ts_init=ts_init,

@@ -18,18 +18,27 @@ import argparse
 import sys
 from datetime import datetime, timezone
 
+from nautilus_trader.model.data import BarType
+
 from jimq_engine.catalog.binance_rest import BinanceFuturesREST
 from jimq_engine.catalog.ingest import (
-    BAR_TYPE_1M,
-    BAR_TYPE_5M,
     ingest_bars,
     ingest_funding,
     open_catalog,
 )
-from jimq_engine.catalog.instruments import btcusdt_perp_binance
+from jimq_engine.catalog.instruments import instrument_for
 
-_RAW_SYMBOL = "BTCUSDT"
-_BAR_TYPES = {"1m": BAR_TYPE_1M, "5m": BAR_TYPE_5M}
+_DEFAULT_SYMBOL = "BTCUSDT-PERP.BINANCE"
+# 卡 #22:bar interval -> Nautilus BarSpec 片段(由 instrument id 組出 BarType)。
+_INTERVAL_SPECS = {"1m": "1-MINUTE-LAST-EXTERNAL", "5m": "5-MINUTE-LAST-EXTERNAL"}
+
+
+def _bar_type_for(symbol: str, interval: str) -> BarType | None:
+    """由 instrument id(symbol)+ interval 組出 BarType(支援多標的)。"""
+    spec = _INTERVAL_SPECS.get(interval)
+    if spec is None:
+        return None
+    return BarType.from_str(f"{symbol}-{spec}")
 
 
 def _to_ms(date_str: str) -> int:
@@ -44,6 +53,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--intervals", default="1m", help="comma list of bar intervals (1m,5m)")
     p.add_argument("--funding", action="store_true", help="also ingest funding rate history")
     p.add_argument("--catalog", default=None, help="catalog path (default: repo data/catalog)")
+    p.add_argument(
+        "--symbol",
+        default=_DEFAULT_SYMBOL,
+        help="instrument id, e.g. BTCUSDT-PERP.BINANCE or ETHUSDT-PERP.BINANCE",
+    )
     return p.parse_args(argv)
 
 
@@ -53,7 +67,9 @@ def run(args: argparse.Namespace) -> int:
     intervals = [s.strip() for s in args.intervals.split(",") if s.strip()]
 
     catalog = open_catalog(args.catalog)
-    instrument = btcusdt_perp_binance()
+    # 由 symbol(instrument id)解析 instrument 定義(支援多標的;未支援拋 ValueError)。
+    instrument = instrument_for(args.symbol)
+    raw_symbol = str(instrument.raw_symbol)
     # 確保 instrument 定義在 catalog 內(查詢/backtest 需要)。
     catalog.write_data([instrument])
 
@@ -61,17 +77,17 @@ def run(args: argparse.Namespace) -> int:
     total = 0
 
     for interval in intervals:
-        bar_type = _BAR_TYPES.get(interval)
+        bar_type = _bar_type_for(args.symbol, interval)
         if bar_type is None:
             print(f"[skip] unsupported interval: {interval}", file=sys.stderr)
             continue
-        raw = client.fetch_klines(_RAW_SYMBOL, interval, start_ms, end_ms)
+        raw = client.fetch_klines(raw_symbol, interval, start_ms, end_ms)
         n = ingest_bars(catalog, raw, instrument, bar_type=bar_type)
         total += n
-        print(f"[bars {interval}] wrote {n} bars")
+        print(f"[bars {args.symbol} {interval}] wrote {n} bars")
 
     if args.funding:
-        raw_f = client.fetch_funding_rates(_RAW_SYMBOL, start_ms, end_ms)
+        raw_f = client.fetch_funding_rates(raw_symbol, start_ms, end_ms)
         nf = ingest_funding(catalog, raw_f, instrument.id)
         total += nf
         print(f"[funding] wrote {nf} updates")
