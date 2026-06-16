@@ -115,14 +115,14 @@ async function onKill() {
 
 .tab:hover {
   color: var(--color-text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-3);
 }
 
 .tab.router-link-active {
   color: #fff;
   font-weight: 600;
   background: var(--color-accent);
-  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  box-shadow: var(--accent-glow);
 }
 
 .header-right {
@@ -137,7 +137,7 @@ async function onKill() {
   background: var(--color-accent);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+  box-shadow: var(--accent-glow);
   letter-spacing: 0.05em;
   font-weight: 700;
 }

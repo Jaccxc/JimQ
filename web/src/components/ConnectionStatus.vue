@@ -27,7 +27,7 @@ const conn = useConnectionStore()
   padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2.5);
   border-radius: var(--radius-xs);
   border: 1px solid var(--glass-l1-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
   text-transform: capitalize;
 }
 
@@ -36,24 +36,24 @@ const conn = useConnectionStore()
   height: 8px;
   border-radius: 50%;
   background: var(--color-text-faint);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 2px var(--surface-1);
 }
 
 /* 連上 / live = 漲色(綠);實心點不在玻璃疊半透明色塊(契約)。 */
 .dot.connected,
 .dot.live {
   background: var(--color-up);
-  box-shadow: 0 0 6px rgba(38, 208, 124, 0.5);
+  box-shadow: var(--up-glow);
 }
 
 .dot.connecting {
-  background: #f0b90b;
-  box-shadow: 0 0 6px rgba(240, 185, 11, 0.5);
+  background: var(--color-warn);
+  box-shadow: var(--warn-glow);
 }
 
 .dot.disconnected {
   background: var(--color-down);
-  box-shadow: 0 0 6px rgba(255, 92, 92, 0.5);
+  box-shadow: var(--down-glow);
 }
 
 .meta {

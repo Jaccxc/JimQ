@@ -51,7 +51,12 @@ const DEFAULT_DEPS: ChartDeps = {
   createSeriesMarkers,
 }
 
-/** EMA line series 預設顏色(fast 偏藍、slow 偏橘)。 */
+/**
+ * EMA line series 預設顏色(fast 偏藍、slow 偏橘)。
+ * LWC series 需 JS 字面色字串(無法吃 CSS var),故此為 series 端單一真相;
+ * theme.css 的 --ema-fast/--ema-slow legend 點色刻意對齊此處同值(改色請兩處同步)。
+ * 註:此為 K 線圖內部疊圖,屬「蠟燭圖內部不 styling」豁免範圍,S6 不改色僅集中註記。
+ */
 const EMA_COLORS: Record<string, string> = {
   fast: '#42a5f5',
   slow: '#ffa726',

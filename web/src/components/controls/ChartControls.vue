@@ -121,7 +121,7 @@ function onTimeframe(ev: Event) {
 }
 .ctl select,
 .ctl input[type='number'] {
-  background: rgba(11, 14, 20, 0.5);
+  background: var(--field-bg);
   color: var(--color-text);
   border: 1px solid var(--glass-l1-border);
   border-radius: var(--radius-xs);
@@ -145,6 +145,6 @@ function onTimeframe(ev: Event) {
   height: 2px;
   display: inline-block;
 }
-.ema-dot.fast { background: #42a5f5; }
-.ema-dot.slow { background: #ffa726; }
+.ema-dot.fast { background: var(--ema-fast); }
+.ema-dot.slow { background: var(--ema-slow); }
 </style>
