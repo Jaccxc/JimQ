@@ -96,10 +96,13 @@ async def run_backtest(
         params=req.params,
         correlation_id=command.correlation_id,
     )
-    # FastCRUD create_schema 不含 status(預設 PENDING);用 model 物件帶入 status。
+    # FastCRUD create_schema 不含 status(model 預設 PENDING)。FastCRUD>=0.15
+    # 的 create 預設回 None,需 schema_to_select + return_as_model 取回帶 id 的列。
     created = await crud.create(
         db,
-        BacktestRunCreate.model_construct(**create.model_dump()),
+        create,
+        schema_to_select=BacktestRunRead,
+        return_as_model=True,
     )
     run_id = created.id
 

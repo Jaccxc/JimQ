@@ -24,6 +24,11 @@ import asyncio
 import logging
 from typing import Any, Mapping
 
+try:  # redis async 阻塞讀逾時例外(視版本位置不同;退化為通用 TimeoutError)。
+    from redis.exceptions import TimeoutError as RedisTimeoutError
+except Exception:  # noqa: BLE001 - pragma: no cover
+    RedisTimeoutError = TimeoutError  # type: ignore[assignment,misc]
+
 from jimq_core.constants import (
     COMMAND_CONSUMER_GROUP,
     COMMAND_STREAM_KEY,
@@ -197,6 +202,9 @@ async def run_command_worker(
             )
         except asyncio.CancelledError:
             raise
+        except RedisTimeoutError:
+            # 阻塞讀逾時(client socket_timeout < block_ms 時的正常情況):無命令,續。
+            continue
         except Exception:  # noqa: BLE001
             logger.exception("command XREADGROUP 失敗;退避後重試")
             await asyncio.sleep(0.5)

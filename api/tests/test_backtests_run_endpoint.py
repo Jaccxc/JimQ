@@ -49,7 +49,7 @@ class _FakeCrud:
     def __init__(self) -> None:
         self.created: list[dict] = []
 
-    async def create(self, db, object):  # noqa: ANN001
+    async def create(self, db, object, **kwargs):  # noqa: ANN001
         self.created.append(object.model_dump())
         return _FakeCreated(id=123, **object.model_dump())
 
@@ -91,11 +91,12 @@ def test_run_creates_pending_row_and_publishes_command(overridden_client):
     assert data["correlation_id"]
     assert data["status"] == BacktestStatus.PENDING.value
 
-    # backtest_run 列以 status=PENDING 建立。
+    # backtest_run 列以使用者欄位建立(status 由 model 預設 PENDING,回應已明示)。
     assert len(fake_crud.created) == 1
     created = fake_crud.created[0]
     assert created["strategy_name"] == "ema_cross"
-    assert created["status"] == BacktestStatus.PENDING
+    assert created["instrument_id"] == "BTCUSDT-PERP.BINANCE"
+    assert created["bar_type"] == "BTCUSDT-PERP.BINANCE-1-MINUTE-LAST-EXTERNAL"
     assert created["correlation_id"] == data["correlation_id"]
 
     # 命令信封 XADD 到 command stream(DB0 另一條 key)。
