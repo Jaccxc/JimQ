@@ -75,6 +75,12 @@ class BacktestRun(Base):
     # plain indexed column, no FK; NULL for single runs). #15.
     run_group: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
 
+    # --- command-plane correlation id (#20 W1): traces a UI-triggered run through ---
+    # request -> command envelope -> run -> event stream (audit). Plain indexed
+    # VARCHAR, no FK (鐵律 12); NULL for runs created outside the command plane
+    # (e.g. #15 grid batch / direct CRUD).
+    correlation_id: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
+
     # --- strategy parameters: genuinely unstructured payload -> JSONB (鐵律 10) ---
     params: Mapped[dict] = mapped_column(JSONB, default_factory=dict)
 

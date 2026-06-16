@@ -20,6 +20,7 @@ class BacktestRunBase(BaseModel):
     end_time: datetime
     params: dict[str, Any] = Field(default_factory=dict)
     run_group: Annotated[str | None, Field(default=None, max_length=64, examples=["grid-abc"])] = None
+    correlation_id: Annotated[str | None, Field(default=None, max_length=64, examples=["corr-abc"])] = None
 
 
 class BacktestRunCreate(BacktestRunBase):
