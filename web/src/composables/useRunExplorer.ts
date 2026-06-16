@@ -20,6 +20,7 @@ import {
 } from '@/api/trades'
 import { fetchBars as realFetchBars, type FetchBarsParams } from '@/api/bars'
 import { tradeToMarkers, tradeToPriceLines, type MarkerSpec, type PriceLineSpec } from '@/lib/tradeMapping'
+import { tradesToEquityCurve, type EquityPoint } from '@/lib/equityCurve'
 import { useBacktestExplorerStore } from '@/stores/backtestExplorer'
 import type { BarDTO } from '@/types/contract'
 
@@ -61,6 +62,10 @@ export function useRunExplorer(opts: UseRunExplorerOptions = {}) {
   const priceLines: ComputedRef<PriceLineSpec[]> = computed(() =>
     store.trades.flatMap((t) => tradeToPriceLines(t)),
   )
+  /** 目前選取 run 的累積權益曲線(供主圖下方 PnL/權益副圖;換 run 自動重算)。 */
+  const equity: ComputedRef<EquityPoint[]> = computed(() =>
+    tradesToEquityCurve(store.trades),
+  )
 
   async function loadRuns(): Promise<void> {
     loading.value = true
@@ -99,5 +104,5 @@ export function useRunExplorer(opts: UseRunExplorerOptions = {}) {
     }
   }
 
-  return { store, bars, markers, priceLines, loading, error, loadRuns, selectRun }
+  return { store, bars, markers, priceLines, equity, loading, error, loadRuns, selectRun }
 }

@@ -86,6 +86,8 @@ export class ChartController {
   private priceLines = new Map<string, IPriceLine>()
   /** EMA line series:id(fast/slow)→ series handle,重用避免重複建。 */
   private emaLines = new Map<string, ISeriesApi<'Line'>>()
+  /** 權益曲線 line series(主圖下方獨立 pane);重用避免換 run 重畫洩漏。 */
+  private equityLine: ISeriesApi<'Line'> | null = null
   /** 已套用的最後一根 bar time(單調守衛:丟棄較舊更新,避免 LWC 拋
    * "Cannot update oldest data";reconnect/切標的重載較舊歷史後由 setHistory 重設)。 */
   private lastBarTime: number | null = null
@@ -135,6 +137,36 @@ export class ChartController {
       this.emaLines.set(id, line)
     }
     line.setData(points as unknown as LineData<Time>[])
+  }
+
+  /**
+   * 設定 / 更新權益(PnL)曲線副圖:主圖(K 線)在 pane 0,權益 line 放
+   * pane 1(獨立 price scale,時間軸對齊主圖)。首次建立、之後重用同一
+   * series 命令式 setData,換 run 重畫不重複建 series(防洩漏)。
+   */
+  setEquityLine(points: { time: number; value: number }[]): void {
+    if (!this.equityLine) {
+      this.equityLine = this.chart.addSeries(
+        this.deps.lineSeriesDef as never,
+        {
+          color: '#a78bfa',
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          crosshairMarkerVisible: true,
+        },
+        1, // paneIndex 1:主圖下方獨立副圖。
+      ) as ISeriesApi<'Line'>
+    }
+    this.equityLine.setData(points as unknown as LineData<Time>[])
+  }
+
+  /** 移除權益曲線副圖 line series。 */
+  clearEquityLine(): void {
+    if (this.equityLine) {
+      this.chart.removeSeries(this.equityLine)
+      this.equityLine = null
+    }
   }
 
   /** 移除指定 EMA line series(關閉疊圖時)。 */
@@ -208,6 +240,8 @@ export class ChartController {
   reset(): void {
     // EMA line series 全移除。
     for (const id of [...this.emaLines.keys()]) this.removeEmaLine(id)
+    // 權益副圖移除。
+    this.clearEquityLine()
     // priceLines 全移除。
     this.clearPriceLines()
     // markers 清空。
