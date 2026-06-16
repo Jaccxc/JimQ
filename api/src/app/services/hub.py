@@ -117,6 +117,20 @@ class Hub:
     def unsubscribe(self, sub: Subscription) -> None:
         self._subs.discard(sub)
 
+    # --- 快照重置(熱重載切 stream 用)-------------------------------------
+    def clear(self) -> None:
+        """清空所有快照狀態(history / rings / last_value / keyed)。
+
+        訂閱者連線**保留**(不動 ``_subs``),只把累積的快照歸零,讓切到新
+        stream 後連上的 WS client 不會收到上一個 run 的殘留 bars/部位/pnl。
+        """
+        self._history.clear()
+        for ring in self._rings.values():
+            ring.clear()
+        self._last_value.clear()
+        for keyed in self._keyed.values():
+            keyed.clear()
+
     # --- 發佈 ---------------------------------------------------------------
     async def publish(self, env: Envelope) -> None:
         self._record(env)
