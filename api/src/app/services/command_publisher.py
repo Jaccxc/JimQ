@@ -21,9 +21,10 @@ from typing import Any
 from jimq_core.constants import (
     COMMAND_STREAM_KEY,
     COMMAND_TYPE_BUILD_DATASET,
+    COMMAND_TYPE_START_STRATEGY,
     COMMAND_TYPE_TRAIN,
 )
-from jimq_core.schemas import ResearchJobCommand, RunBacktestCommand
+from jimq_core.schemas import ControlCommand, ResearchJobCommand, RunBacktestCommand
 
 # research_job 種類 → 命令平面 command_type(列舉欄位慣例,大寫字面值)。
 _JOB_TYPE_TO_COMMAND: dict[str, str] = {
@@ -77,6 +78,27 @@ def build_research_job_command(
         correlation_id=correlation_id or uuid.uuid4().hex,
         job_id=job_id,
         params=params,
+    )
+
+
+def build_control_command(
+    *,
+    command_type: str = COMMAND_TYPE_START_STRATEGY,
+    strategy_id: str | None = None,
+    params: dict[str, Any] | None = None,
+    correlation_id: str | None = None,
+) -> ControlCommand:
+    """組裝策略控制命令信封(卡 #24 W5)。
+
+    ``command_type`` 為 START_STRATEGY / STOP_STRATEGY / KILL 大寫字面值。
+    ``strategy_id`` start/stop 必帶,KILL 為全域急停可省略。``correlation_id``
+    未給時生成 uuid4(端到端追蹤)。
+    """
+    return ControlCommand(
+        command_type=command_type,
+        correlation_id=correlation_id or uuid.uuid4().hex,
+        strategy_id=strategy_id,
+        params=params or {},
     )
 
 

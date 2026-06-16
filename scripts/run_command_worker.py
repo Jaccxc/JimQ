@@ -28,6 +28,7 @@ import redis.asyncio as aioredis
 from jimq_core.constants import REDIS_BUS_DB
 
 from jimq_engine.catalog.ingest import open_catalog
+from jimq_engine.control.node_controller import NodeController
 from jimq_engine.control.status_writer import StatusWriter, backtest_run_db_url
 from jimq_engine.control.trade_writer import TradeWriter
 from jimq_engine.control.worker import run_command_worker
@@ -54,6 +55,10 @@ async def _main() -> None:
     writer = StatusWriter(backtest_run_db_url())
     trade_writer = TradeWriter(backtest_run_db_url())  # 卡 #21:成交持久化
     catalog = open_catalog()
+    # 卡 #24 (W5):對測試節點的策略控制器。MVP 以空 registry 起(尚無常駐
+    # backtest/sandbox 節點掛策略);收到 start/stop/kill 控制命令即派送到它
+    # (真 live 節點掛載屬 P2-S3)。
+    controller = NodeController()
 
     stop = asyncio.Event()
     log.info("command worker 啟動(Redis %s:%s DB%s);等待命令…", host, port, REDIS_BUS_DB)
@@ -67,6 +72,7 @@ async def _main() -> None:
             redis_port=port,
             stop_event=stop,
             trade_writer=trade_writer,
+            controller=controller,
         )
     finally:
         await aredis.aclose()

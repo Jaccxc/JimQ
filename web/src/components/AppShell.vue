@@ -6,10 +6,21 @@
  * LIVE-TESTNET)+ 全域 KILL 按鈕(本卡 placeholder/disabled,真功能待 P2-S3)
  * + WS 連線狀態。內容區 <RouterView/> 由 vue-router 切換。
  */
+import { inject } from 'vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import { useAppModeStore } from '@/stores/appMode'
+import { useStrategyControl, type ControlApi } from '@/composables/useStrategyControl'
 
 const appMode = useAppModeStore()
+
+// 卡 #24 (W5):全域 KILL 接命令平面。可注入 control api(測試決定論);
+// 預設用真實 REST client。
+const injectedApi = inject<Partial<ControlApi> | undefined>('strategyControlApi', undefined)
+const control = useStrategyControl({ api: injectedApi })
+
+async function onKill() {
+  await control.kill()
+}
 </script>
 
 <template>
@@ -33,9 +44,10 @@ const appMode = useAppModeStore()
         <button
           class="kill"
           type="button"
-          disabled
-          title="全域急停 — 真功能待 P2-S3"
+          :disabled="control.pending.value"
+          title="全域急停 — 停止所有策略 + 取消未成交單(對測試節點)"
           data-testid="kill-switch"
+          @click="onKill"
         >
           KILL
         </button>
@@ -72,7 +84,9 @@ const appMode = useAppModeStore()
   font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
   padding: 4px 10px; border-radius: 4px;
   background: #3f1d1d; color: #f87171; border: 1px solid #7f1d1d;
-  cursor: not-allowed; opacity: 0.6;
+  cursor: pointer;
 }
+.kill:hover:not(:disabled) { background: #7f1d1d; color: #fecaca; }
+.kill:disabled { cursor: not-allowed; opacity: 0.6; }
 .shell-body { flex: 1; min-height: 0; overflow: hidden; }
 </style>

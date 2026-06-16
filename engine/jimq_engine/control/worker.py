@@ -32,9 +32,12 @@ except Exception:  # noqa: BLE001 - pragma: no cover
 from jimq_core.constants import (
     COMMAND_CONSUMER_GROUP,
     COMMAND_STREAM_KEY,
+    COMMAND_TYPE_KILL,
     COMMAND_TYPE_RUN_BACKTEST,
+    COMMAND_TYPE_START_STRATEGY,
+    COMMAND_TYPE_STOP_STRATEGY,
 )
-from jimq_core.schemas import RunBacktestCommand
+from jimq_core.schemas import ControlCommand, RunBacktestCommand
 from jimq_core.timeframes import bar_type_for
 
 from jimq_engine.catalog.ingest import open_catalog, query_bars
@@ -79,6 +82,54 @@ def parse_command_entry(
     except Exception:  # noqa: BLE001 — 壞 payload 不可信,略過。
         logger.warning("無法解析 command payload,略過")
         return None
+
+
+# --- 卡 #24 (W5):控制命令(start/stop/kill)解析 + 派送 --------------------
+
+_CONTROL_TYPES = frozenset(
+    {COMMAND_TYPE_START_STRATEGY, COMMAND_TYPE_STOP_STRATEGY, COMMAND_TYPE_KILL}
+)
+
+
+def parse_control_entry(
+    entry: tuple[Any, Mapping[Any, Any]]
+) -> ControlCommand | None:
+    """把一筆 command stream entry 解析成 ``ControlCommand``。
+
+    非控制命令(start/stop/kill 以外的 command_type)、或 payload 無法解析 →
+    回 None(安全略過;run_backtest / research 命令各走各的解析器)。
+    """
+    _entry_id, fields = entry
+    fields = {_decode(k): _decode(v) for k, v in fields.items()}
+    if fields.get("command_type") not in _CONTROL_TYPES:
+        return None
+    payload = fields.get("payload")
+    if not payload:
+        return None
+    try:
+        return ControlCommand.model_validate_json(payload)
+    except Exception:  # noqa: BLE001 — 壞 payload 不可信,略過。
+        logger.warning("無法解析 control command payload,略過")
+        return None
+
+
+def handle_control_command(command: ControlCommand, *, controller: Any) -> None:
+    """依控制命令型別對(測試)節點 controller 派送動作。
+
+    - START_STRATEGY → controller.start_strategy(strategy_id, params)
+    - STOP_STRATEGY  → controller.stop_strategy(strategy_id)
+    - KILL           → controller.kill()(全域急停:取消未成交單 + 平倉 + 停止)
+
+    對 backtest/sandbox 測試節點(真 live 節點控制屬 P2-S3)。
+    """
+    if command.command_type == COMMAND_TYPE_KILL:
+        controller.kill()
+    elif command.command_type == COMMAND_TYPE_START_STRATEGY:
+        controller.start_strategy(command.strategy_id, command.params)
+    elif command.command_type == COMMAND_TYPE_STOP_STRATEGY:
+        controller.stop_strategy(command.strategy_id)
+    else:  # pragma: no cover — parse_control_entry 已過濾未知型別。
+        logger.warning("未知控制命令型別,略過:%s", command.command_type)
 
 
 def _publish_latest_key(redis_client: Any, key: str) -> None:
@@ -203,11 +254,14 @@ async def run_command_worker(
     block_ms: int = 5000,
     stop_event: asyncio.Event | None = None,
     trade_writer: TradeWriter | None = None,
+    controller: Any = None,
 ) -> None:
     """常駐 XREADGROUP loop:消費 command stream → 解析 → handle → ack。
 
     ``aredis``:async Redis(消費命令);``sync_redis``:同步 Redis(發布 latest
     stream key);``writer``:狀態回寫。``catalog`` 未給時用預設(env/JIMQ_CATALOG_PATH)。
+    ``controller``(卡 #24 W5):對測試節點的策略控制器;收到 start/stop/kill
+    控制命令時派送到它(未給時控制命令被安全略過,僅處理 run_backtest)。
     """
     if catalog is None:
         catalog = open_catalog()
@@ -231,20 +285,31 @@ async def run_command_worker(
         for _key, entries in resp:
             for entry in entries:
                 entry_id = entry[0]
-                command = parse_command_entry(entry)
-                if command is not None:
-                    try:
-                        await handle_run_backtest(
-                            command,
-                            writer=writer,
-                            catalog=catalog,
-                            redis_client=sync_redis,
-                            redis_host=redis_host,
-                            redis_port=redis_port,
-                            trade_writer=trade_writer,
-                        )
-                    except Exception:  # noqa: BLE001 — handler 已回寫 FAILED;不讓 loop 崩。
-                        logger.exception("處理命令失敗(已標 FAILED),繼續")
+                # 先試控制命令(start/stop/kill);非控制命令回 None → 再試 run_backtest。
+                control = parse_control_entry(entry)
+                if control is not None:
+                    if controller is not None:
+                        try:
+                            handle_control_command(control, controller=controller)
+                        except Exception:  # noqa: BLE001 — 控制失敗不讓 loop 崩。
+                            logger.exception("處理控制命令失敗,繼續")
+                    else:
+                        logger.warning("收到控制命令但無 controller(略過):%s", control.command_type)
+                else:
+                    command = parse_command_entry(entry)
+                    if command is not None:
+                        try:
+                            await handle_run_backtest(
+                                command,
+                                writer=writer,
+                                catalog=catalog,
+                                redis_client=sync_redis,
+                                redis_host=redis_host,
+                                redis_port=redis_port,
+                                trade_writer=trade_writer,
+                            )
+                        except Exception:  # noqa: BLE001 — handler 已回寫 FAILED;不讓 loop 崩。
+                            logger.exception("處理命令失敗(已標 FAILED),繼續")
                 try:
                     await aredis.xack(stream_key, group, entry_id)
                 except Exception:  # noqa: BLE001

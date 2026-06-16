@@ -29,5 +29,16 @@ COMMAND_TYPE_RUN_BACKTEST: str = "RUN_BACKTEST"
 COMMAND_TYPE_BUILD_DATASET: str = "BUILD_DATASET"
 COMMAND_TYPE_TRAIN: str = "TRAIN"
 
+# --- 策略控制命令(卡 #24 W5)----------------------------------------------
+# 策略控制平面(start/stop/kill)同走命令平面:api(發布端)把控制命令信封
+# XADD 到 ``COMMAND_STREAM_KEY``(與 run_backtest / research job 同 key,靠
+# ``command_type`` 路由);engine 常駐 command worker XREADGROUP 消費並對
+# backtest/sandbox 測試節點動作(真 live 節點控制屬 P2-S3)。命令種類契約字面值
+# (大寫,對齊列舉欄位慣例):
+COMMAND_TYPE_START_STRATEGY: str = "START_STRATEGY"
+COMMAND_TYPE_STOP_STRATEGY: str = "STOP_STRATEGY"
+# KILL 為 header 全域急停:停止策略 + 取消未成交單(對所有測試節點策略)。
+COMMAND_TYPE_KILL: str = "KILL"
+
 # command worker 的 Redis consumer group(多 worker 時 consumer 名可帶 pid)。
 COMMAND_CONSUMER_GROUP: str = "jimq-engine"

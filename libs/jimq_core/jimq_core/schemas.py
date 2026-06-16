@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from jimq_core.constants import (
     COMMAND_TYPE_BUILD_DATASET,
     COMMAND_TYPE_RUN_BACKTEST,
+    COMMAND_TYPE_START_STRATEGY,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - 僅供型別檢查,執行期不匯入 nautilus
@@ -183,4 +184,32 @@ class ResearchJobCommand(BaseModel):
     command_type: str = COMMAND_TYPE_BUILD_DATASET
     correlation_id: str
     job_id: int
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class ControlCommand(BaseModel):
+    """策略控制命令信封(卡 #24 W5;命令平面共用契約)。
+
+    web 觸發的策略 start/stop 與全域 kill 同走命令平面:api(發布端)把此信封
+    JSON XADD 到 ``COMMAND_STREAM_KEY``(與 run_backtest / research job 同 key,
+    靠 ``command_type`` 路由);engine 常駐 command worker XREADGROUP 消費並對
+    backtest/sandbox 測試節點動作。api 不 import engine —— 兩端僅經此信封解耦。
+
+    - ``command_type``:``START_STRATEGY`` / ``STOP_STRATEGY`` / ``KILL``
+      (列舉欄位慣例,大寫字面值)。
+    - ``correlation_id``:端到端追蹤 id(請求 → 命令 → 動作),供審計。
+    - ``strategy_id``:目標策略識別(start/stop 用);``KILL`` 為全域急停可省略
+      (對所有測試節點策略停止 + 取消未成交單)。
+    - ``params``:本質非結構化參數 payload(如 start 時的策略參數)。
+
+    純 Pydantic(無 nautilus / redis / sqlalchemy 依賴),api 與 engine 共用。
+
+    ⛔ 對 backtest/sandbox 測試節點;真 live 節點控制屬 P2-S3(需有效金鑰)。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    command_type: str = COMMAND_TYPE_START_STRATEGY
+    correlation_id: str
+    strategy_id: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)

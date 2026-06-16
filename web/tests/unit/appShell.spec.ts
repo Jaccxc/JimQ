@@ -5,7 +5,7 @@
  * (BACKTEST / LIVE-TESTNET)+ 全域 KILL 按鈕(本卡 placeholder/disabled)+
  * WS 狀態。用 vue-router。驗 DOM 行為,不驗實作細節。
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, RouterLinkStub } from '@vue/test-utils'
 import AppShell from '@/components/AppShell.vue'
@@ -45,11 +45,28 @@ describe('AppShell tabbed header', () => {
     expect(badge.text()).toContain('LIVE-TESTNET')
   })
 
-  it('全域 KILL 按鈕存在且本卡為 disabled(placeholder,真功能待 P2-S3)', () => {
+  it('全域 KILL 按鈕存在且已啟用(卡 #24 W5:接命令平面真功能)', () => {
     const w = mountShell()
     const kill = w.get('[data-testid="kill-switch"]')
     expect(kill.text().toUpperCase()).toContain('KILL')
-    expect((kill.element as HTMLButtonElement).disabled).toBe(true)
+    // 卡 #24:從 disabled placeholder 變真功能 → 不再 disabled。
+    expect((kill.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('點全域 KILL 發 KILL 命令(經注入的 control composable)', async () => {
+    const killAll = vi.fn().mockResolvedValue({
+      strategy_id: null,
+      command_type: 'KILL',
+      correlation_id: 'c-kill',
+    })
+    const w = mount(AppShell, {
+      global: {
+        stubs: { RouterLink: RouterLinkStub, RouterView: true },
+        provide: { strategyControlApi: { killAll } },
+      },
+    })
+    await w.get('[data-testid="kill-switch"]').trigger('click')
+    expect(killAll).toHaveBeenCalled()
   })
 
   it('header 含 WS 連線狀態', () => {
