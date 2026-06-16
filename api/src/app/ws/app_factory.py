@@ -23,7 +23,11 @@ from typing import Any
 import redis.asyncio as aioredis
 from fastapi import FastAPI
 
-from jimq_core.constants import REDIS_BUS_DB
+from jimq_core.constants import (
+    REDIS_BUS_DB,
+    SCOPE_LATEST_KEY,
+    STREAM_SCOPE_LIVE,
+)
 
 from ..services.consumer_supervisor import ConsumerSupervisor
 from ..services.hub import Hub
@@ -160,6 +164,77 @@ def make_hotreload_lifespan(
                 await redis_client.aclose()
             else:
                 # 注入的 client 由呼叫端管理生命週期;若有 aclose 仍禮貌關閉。
+                aclose = getattr(redis_client, "aclose", None)
+                if aclose is not None:
+                    await aclose()
+
+    return lifespan
+
+
+def make_multiscope_lifespan(
+    *,
+    redis_url: str | None = None,
+    client: Any = None,
+    poll_interval: float = 1.0,
+):
+    """卡 A — **雙 scope 並行消費** lifespan(live/backtest 資料源隔離)。
+
+    為 ``SCOPE_LATEST_KEY`` 的**每個 scope**(``live`` / ``backtest``)各建一個
+    ``Hub`` + ``ConsumerSupervisor``:各自 watch 自己的 latest-key(live watch
+    ``jimq:live:latest_stream_key``、backtest watch ``jimq:backtest:latest_stream_key``)。
+    兩 supervisor 並行,互不污染 —— 一跑 backtest 只切 backtest hub,Live 圖不再
+    混入 backtest 的 buy/sell。
+
+    app.state 掛上:
+    - ``scoped_hubs[scope]`` / ``scoped_supervisors[scope]`` /
+      ``scoped_supervisor_tasks[scope]``(供 WS 路由與關閉)。
+    - ``hub`` 指向 **live** hub(現狀相容:未帶 scope 的 WS 仍走 live)。
+
+    ``client`` 可注入(測試用);未注入時連 localhost DB0 bus。關閉時兩 supervisor
+    都乾淨 cancel/await。
+    """
+    if redis_url is None:
+        redis_url = bus_redis_url()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        owns_client = client is None
+        redis_client = aioredis.from_url(redis_url) if owns_client else client
+
+        scoped_hubs: dict[str, Hub] = {}
+        scoped_supervisors: dict[str, ConsumerSupervisor] = {}
+        scoped_tasks: dict[str, asyncio.Task] = {}
+        for scope, latest_key in SCOPE_LATEST_KEY.items():
+            hub = Hub()
+            supervisor = ConsumerSupervisor(
+                client=redis_client,
+                hub=hub,
+                consumer_factory=run_consumer,
+                poll_interval=poll_interval,
+                latest_key=latest_key,
+            )
+            scoped_hubs[scope] = hub
+            scoped_supervisors[scope] = supervisor
+            scoped_tasks[scope] = asyncio.create_task(supervisor.run())
+
+        app.state.scoped_hubs = scoped_hubs
+        app.state.scoped_supervisors = scoped_supervisors
+        app.state.scoped_supervisor_tasks = scoped_tasks
+        # 相容:未帶 scope 的 WS / 既有讀 app.state.hub 的路徑走 live hub。
+        app.state.hub = scoped_hubs[STREAM_SCOPE_LIVE]
+        try:
+            yield
+        finally:
+            for supervisor in scoped_supervisors.values():
+                await supervisor.stop()
+            for task in scoped_tasks.values():
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
+            if owns_client:
+                await redis_client.aclose()
+            else:
                 aclose = getattr(redis_client, "aclose", None)
                 if aclose is not None:
                     await aclose()

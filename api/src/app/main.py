@@ -23,8 +23,7 @@ from .core.setup import create_application, lifespan_factory
 from .services.hub import Hub
 from .ws.app_factory import (
     LATEST_SENTINEL,
-    LATEST_STREAM_KEY,
-    make_hotreload_lifespan,
+    make_multiscope_lifespan,
     make_streaming_lifespan,
 )
 from .ws.stream import register_ws
@@ -41,11 +40,13 @@ def _composed_lifespan():
         async with boilerplate(app):
             configured = os.environ.get("JIMQ_STREAM_KEY")
             if configured == LATEST_SENTINEL:
-                # @latest 模式:用 supervisor 監看 LATEST_STREAM_KEY 熱重載,
-                # engine(make live/paper/exp)後起寫新 key 即自動接上,免 make reload。
-                logger.info("串流 consumer 熱重載模式啟動(監看 %s)", LATEST_STREAM_KEY)
-                hotreload = make_hotreload_lifespan()
-                async with hotreload(app):
+                # @latest 模式(卡 A):雙 scope 並行消費 —— live 與 backtest 各自
+                # Hub + ConsumerSupervisor,各 watch 自己的 latest-key。一跑 backtest
+                # 只切 backtest hub,Live 圖不再混入 backtest 事件;engine 後起寫
+                # 對應 scope 的 key 即自動接上,免 make reload。
+                logger.info("串流 consumer 雙 scope 熱重載模式啟動(live + backtest)")
+                multiscope = make_multiscope_lifespan()
+                async with multiscope(app):
                     yield
             elif configured:
                 # 字面 key 模式:釘死該 key,維持原本單一 consumer(不監看)。
