@@ -144,7 +144,7 @@ export class ChartController {
    * pane 1(獨立 price scale,時間軸對齊主圖)。首次建立、之後重用同一
    * series 命令式 setData,換 run 重畫不重複建 series(防洩漏)。
    */
-  setEquityLine(points: LinePoint[]): void {
+  setEquityLine(points: { time: number; value: number }[]): void {
     if (!this.equityLine) {
       this.equityLine = this.chart.addSeries(
         this.deps.lineSeriesDef as never,

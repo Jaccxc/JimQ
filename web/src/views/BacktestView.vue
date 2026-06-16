@@ -1,45 +1,58 @@
 <script setup lang="ts">
 /**
- * 卡 #27 (P2-S1) — Backtest 頁(/backtest)。
+ * 卡 C — Backtest 頁(/backtest):單一主圖 + PnL/權益副圖。
  *
- * 整併既有 W1/W2:BacktestLauncher(觸發 + 輪詢狀態 + 串流圖)+ RunExplorer
- * (歷史 run 列表 + 重播圖)。掛載時 appMode.setBacktest() → badge = BACKTEST。
+ * 版面:頂部 BacktestLauncher(觸發 + 輪詢狀態)→ 單一主圖(RunExplorer 的
+ * ReplayChart):
+ *  - 預設顯示「選中的 run」(從 History 列表選過去 run → 重載該 run K 線 +
+ *    進出場箭頭 + SL/TP + 權益副圖)。
+ *  - 未選 run 時,顯示「剛從表單啟動、正在 scope=backtest 串流長出的 run」——
+ *    串流 bars 經 market store 餵進同一主圖即時長出(用卡 A scope=backtest,
+ *    與 Live 分頁互不污染)。
+ *
+ * 移除了舊版會混入 live 的中間 CandleChart(擺反且亂)。掛載時
+ * appMode.setBacktest() → badge = BACKTEST。
  */
-import { onMounted, onBeforeUnmount } from 'vue'
-import CandleChart from '@/components/chart/CandleChart.vue'
-import ChartControls from '@/components/controls/ChartControls.vue'
-import OrdersTable from '@/components/panels/OrdersTable.vue'
-import PositionsTable from '@/components/panels/PositionsTable.vue'
-import PnlWidget from '@/components/panels/PnlWidget.vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import BacktestLauncher from '@/components/controls/BacktestLauncher.vue'
 import RunExplorerView from '@/views/RunExplorerView.vue'
 import { fetchBacktestRun } from '@/api/backtests'
 import { useBacktestRunStore, type RunStatus } from '@/stores/backtestRun'
-import { useChartSettingsStore } from '@/stores/chartSettings'
 import { useAppModeStore } from '@/stores/appMode'
+import { useMarketStore } from '@/stores/market'
+import { useFillsStore } from '@/stores/fills'
 import { useTradeSocket } from '@/composables/useTradeSocket'
 import { useChartData } from '@/composables/useChartData'
+import { fillToMarker } from '@/lib/tradeMapping'
+import type { FetchBarsParams } from '@/api/bars'
+import type { BarDTO } from '@/types/contract'
+import type { RunExplorerApi } from '@/composables/useRunExplorer'
 
 const CHANNELS = ['bars', 'orders', 'fills', 'positions', 'pnl']
 
-const runStore = useBacktestRunStore()
-const settings = useChartSettingsStore()
-const appMode = useAppModeStore()
-// 卡 A:Backtest 即時串流圖訂 scope=backtest → 與 Live 分頁互不污染。
-const socket = useTradeSocket({ channels: CHANNELS, scope: 'backtest' })
-const chartData = useChartData({ socket })
+// 注入點(測試決定論);預設用真實 client/fetch。
+const props = defineProps<{
+  explorerApi?: Partial<RunExplorerApi>
+  fetchBars?: (params: FetchBarsParams) => Promise<BarDTO[]>
+}>()
 
-async function onSwitch(sel: { symbol: string; timeframe: string }) {
-  try {
-    await chartData.switchTo(sel)
-  } catch (err) {
-    console.warn('切換標的/週期失敗', err)
-  }
-}
+const runStore = useBacktestRunStore()
+const appMode = useAppModeStore()
+const market = useMarketStore()
+const fills = useFillsStore()
+// 卡 A:Backtest 即時串流訂 scope=backtest → 與 Live 分頁互不污染。
+const socket = useTradeSocket({ channels: CHANNELS, scope: 'backtest' })
+const chartData = useChartData({ socket, fetchBars: props.fetchBars })
+
+// 未選 run 時主圖顯示串流中的 backtest:market store 的 bars + fills marker。
+const liveBars = computed<BarDTO[]>(() => market.bars)
+const liveMarkers = computed(() => fills.fills.map((f) => fillToMarker(f)))
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 function onLaunched(runId: number) {
+  // 新回測:清掉上一輪殘留,讓新 run 從頭串進主圖長出。
+  market.setHistory([])
   socket.connect()
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = setInterval(async () => {
@@ -58,11 +71,6 @@ function onLaunched(runId: number) {
 
 onMounted(async () => {
   appMode.setBacktest()
-  try {
-    await chartData.reload()
-  } catch (err) {
-    console.warn('歷史 bars 載入失敗', err)
-  }
   socket.connect()
 })
 
@@ -75,22 +83,15 @@ onBeforeUnmount(() => {
 <template>
   <div class="backtest">
     <header class="topbar">
-      <h1>Backtest — {{ settings.symbol }} {{ settings.timeframe }}</h1>
+      <h1>Backtest</h1>
     </header>
     <BacktestLauncher @launched="onLaunched" />
-    <main class="grid">
-      <section class="chart-cell">
-        <ChartControls @switch="onSwitch" />
-        <CandleChart />
-      </section>
-      <aside class="side">
-        <PnlWidget />
-        <PositionsTable />
-        <OrdersTable />
-      </aside>
-    </main>
     <section class="explorer-cell">
-      <RunExplorerView />
+      <RunExplorerView
+        :api="props.explorerApi"
+        :live-bars="liveBars"
+        :live-markers="liveMarkers"
+      />
     </section>
   </div>
 </template>
@@ -102,9 +103,5 @@ onBeforeUnmount(() => {
   padding: 8px 16px; border-bottom: 1px solid #1c2230;
 }
 .topbar h1 { font-size: 14px; color: #d1d4dc; margin: 0; font-weight: 600; }
-.grid { display: grid; grid-template-columns: 1fr 320px; min-height: 360px; }
-.chart-cell { min-height: 0; padding: 8px; display: flex; flex-direction: column; }
-.chart-cell > :last-child { flex: 1; min-height: 320px; }
-.side { border-left: 1px solid #1c2230; overflow-y: auto; }
-.explorer-cell { border-top: 1px solid #1c2230; min-height: 360px; }
+.explorer-cell { flex: 1; min-height: 480px; }
 </style>

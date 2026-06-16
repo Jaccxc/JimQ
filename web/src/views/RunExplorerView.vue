@@ -8,16 +8,42 @@
  * 邏輯全在 useRunExplorer composable + backtestExplorer store(已 Vitest 覆蓋);
  * 本視圖僅綁定與命令式重畫(復用 ChartController/tradeMapping)。
  */
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import ReplayChart from '@/components/chart/ReplayChart.vue'
 import { useRunExplorer, type RunExplorerApi } from '@/composables/useRunExplorer'
 import type { SortKey } from '@/stores/backtestExplorer'
+import type { BarDTO } from '@/types/contract'
+import type { MarkerSpec, PriceLineSpec } from '@/lib/tradeMapping'
+import type { EquityPoint } from '@/lib/equityCurve'
 
-// api 可注入(測試決定論);預設用真實 REST client。
-const props = defineProps<{ api?: Partial<RunExplorerApi> }>()
+// 卡 C:單一主圖。預設顯示「選中的 run」(歷史);未選 run 時,改顯示父層傳入的
+// 「剛從表單啟動、正在 scope=backtest 串流長出的 run」(liveBars/liveMarkers/
+// liveEquity)。選了 run → 主圖切回該 run 的歷史資料(全量重畫)。
+const props = defineProps<{
+  /** api 可注入(測試決定論);預設用真實 REST client。 */
+  api?: Partial<RunExplorerApi>
+  /** 串流中(剛啟動)backtest 的即時 bars(未選 run 時餵主圖)。 */
+  liveBars?: BarDTO[]
+  liveMarkers?: MarkerSpec[]
+  livePriceLines?: PriceLineSpec[]
+  liveEquity?: EquityPoint[]
+}>()
 
 const ex = useRunExplorer({ api: props.api })
 const { store } = ex
+
+// 主圖資料源:選了 run → run 歷史;未選 → 串流中 backtest(live*)。
+const hasSelectedRun = computed(() => store.selectedRunId != null)
+const chartBars = computed(() => (hasSelectedRun.value ? ex.bars.value : props.liveBars ?? []))
+const chartMarkers = computed(() =>
+  hasSelectedRun.value ? ex.markers.value : props.liveMarkers ?? [],
+)
+const chartPriceLines = computed(() =>
+  hasSelectedRun.value ? ex.priceLines.value : props.livePriceLines ?? [],
+)
+const chartEquity = computed(() =>
+  hasSelectedRun.value ? ex.equity.value : props.liveEquity ?? [],
+)
 
 const METRIC_COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'id', label: 'Run' },
@@ -90,12 +116,12 @@ onMounted(() => {
         Run #{{ store.selectedRun.id }} · {{ store.selectedRun.strategy_name }} ·
         {{ store.selectedRun.instrument_id }} {{ store.selectedRun.timeframe }}
       </h2>
-      <h2 v-else>選一個 run 看 K 線與進出場</h2>
+      <h2 v-else>選一個 run 看 K 線與進出場(或啟動新回測即時串流)</h2>
       <ReplayChart
-        :bars="ex.bars.value"
-        :markers="ex.markers.value"
-        :price-lines="ex.priceLines.value"
-        :equity="ex.equity.value"
+        :bars="chartBars"
+        :markers="chartMarkers"
+        :price-lines="chartPriceLines"
+        :equity="chartEquity"
       />
     </div>
   </section>
