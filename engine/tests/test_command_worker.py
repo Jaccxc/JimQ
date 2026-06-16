@@ -119,11 +119,18 @@ async def test_handle_run_backtest_runs_streams_and_completes(tmp_path):
         end=datetime(2023, 11, 15, 0, 0, tzinfo=UTC),
     )
 
+    from jimq_engine.control.trade_writer import TradeWriter
+
     writer = StatusWriter(db_url)
+    trade_writer = TradeWriter(db_url)
     rclient = redis_sync.Redis(host="localhost", port=6379, db=REDIS_BUS_DB)
     try:
         stream_key = await handle_run_backtest(
-            cmd, writer=writer, catalog=catalog, redis_client=rclient
+            cmd,
+            writer=writer,
+            catalog=catalog,
+            redis_client=rclient,
+            trade_writer=trade_writer,
         )
         # 事件進事件 stream。
         import time
@@ -141,10 +148,21 @@ async def test_handle_run_backtest_runs_streams_and_completes(tmp_path):
                 )
             ).scalar_one()
         assert status == "COMPLETED"
+        # 卡 #21:跑完把成交寫入 backtest_trade(此合成黃金交叉應至少成交一筆)。
+        async with db.connect() as conn:
+            n_trades = (
+                await conn.execute(
+                    sa.text("SELECT count(*) FROM backtest_trade WHERE run_id=:id"),
+                    {"id": run_id},
+                )
+            ).scalar_one()
+        assert n_trades >= 1
     finally:
         rclient.delete(stream_key)
         async with db.begin() as conn:
+            await conn.execute(sa.text("DELETE FROM backtest_trade WHERE run_id=:id"), {"id": run_id})
             await conn.execute(sa.text("DELETE FROM backtest_run WHERE id=:id"), {"id": run_id})
         await writer.aclose()
+        await trade_writer.aclose()
         rclient.close()
         await db.dispose()

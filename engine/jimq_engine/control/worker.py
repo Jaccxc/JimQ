@@ -41,6 +41,7 @@ from jimq_engine.catalog.ingest import open_catalog, query_bars
 from jimq_engine.catalog.instruments import instrument_for
 from jimq_engine.control.factory import build_strategy
 from jimq_engine.control.status_writer import StatusWriter, backtest_run_db_url
+from jimq_engine.control.trade_writer import TradeWriter, extract_trades
 from jimq_engine.streaming.redis_bus import (
     build_streaming_engine_with_strategy,
     stream_key_for,
@@ -106,12 +107,17 @@ async def handle_run_backtest(
     redis_client: Any,
     redis_host: str = "localhost",
     redis_port: int = 6379,
+    trade_writer: TradeWriter | None = None,
 ) -> str:
     """跑一個 run_backtest 命令的完整 side-effect;回傳事件 stream key。
 
     status RUNNING → (跑串流 backtest + 發布 stream key) → COMPLETED;
     任何例外 → FAILED 並 re-raise。``catalog`` 已開;``redis_client`` 為同步
     redis(發布 latest key 用)。
+
+    卡 #21:給 ``trade_writer`` 時,跑完(dispose 前)抽 closed positions 成交
+    並 app 級寫入 backtest_trade。成交持久化失敗只記 log,不影響 run 完成狀態
+    (run 已成功;成交為衍生資料)。
     """
     await writer.mark_running(command.run_id)
     try:
@@ -150,6 +156,16 @@ async def handle_run_backtest(
         _publish_latest_key(redis_client, key)
 
         metrics = _extract_metrics(engine)
+
+        # 卡 #21:抽成交並持久化(dispose 前;cache 仍可讀)。失敗不擋 run 完成。
+        if trade_writer is not None:
+            try:
+                trades = extract_trades(engine, run_id=command.run_id)
+                written = await trade_writer.write_trades(trades)
+                logger.info("run %s 成交持久化:%s 筆", command.run_id, written)
+            except Exception:  # noqa: BLE001
+                logger.exception("run %s 成交持久化失敗(run 仍標 COMPLETED)", command.run_id)
+
         await asyncio.to_thread(engine.dispose)
         await writer.mark_completed(command.run_id, metrics=metrics)
         logger.info("run %s COMPLETED;stream key=%s", command.run_id, key)
@@ -186,6 +202,7 @@ async def run_command_worker(
     stream_key: str = COMMAND_STREAM_KEY,
     block_ms: int = 5000,
     stop_event: asyncio.Event | None = None,
+    trade_writer: TradeWriter | None = None,
 ) -> None:
     """常駐 XREADGROUP loop:消費 command stream → 解析 → handle → ack。
 
@@ -224,6 +241,7 @@ async def run_command_worker(
                             redis_client=sync_redis,
                             redis_host=redis_host,
                             redis_port=redis_port,
+                            trade_writer=trade_writer,
                         )
                     except Exception:  # noqa: BLE001 — handler 已回寫 FAILED;不讓 loop 崩。
                         logger.exception("處理命令失敗(已標 FAILED),繼續")
