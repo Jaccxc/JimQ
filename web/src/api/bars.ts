@@ -28,3 +28,36 @@ export async function fetchBars(params: FetchBarsParams): Promise<BarDTO[]> {
   }
   return (await res.json()) as BarDTO[]
 }
+
+/**
+ * Live 頁近期真 klines client(對齊 #30 GET /api/v1/live/bars)。
+ *
+ * 後端從 Binance testnet 期貨公開 klines 取最近 ``limit`` 根 → BarDTO[](與 live
+ * WS bar 同 venue,價位一致 ~66k)。Live 頁初始載入用此端點取代 2024 catalog,
+ * 消除 40k/66k 斷裂。fetch 可注入(測試決定論)。
+ */
+export interface FetchLiveBarsParams {
+  symbol: string
+  /** Binance kline interval,如 1m / 5m(預設 1m)。 */
+  timeframe?: string
+  /** 取最近 N 根(預設 500,後端上限 1500)。 */
+  limit?: number
+  /** base path 覆寫(預設同源 /api/v1)。 */
+  baseUrl?: string
+}
+
+export async function fetchLiveBars(
+  params: FetchLiveBarsParams,
+  fetchImpl: typeof fetch = fetch,
+): Promise<BarDTO[]> {
+  const base = params.baseUrl ?? '/api/v1'
+  const q = new URLSearchParams()
+  q.set('symbol', params.symbol)
+  q.set('timeframe', params.timeframe ?? '1m')
+  q.set('limit', String(params.limit ?? 500))
+  const res = await fetchImpl(`${base}/live/bars?${q.toString()}`)
+  if (!res.ok) {
+    throw new Error(`fetchLiveBars ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as BarDTO[]
+}
