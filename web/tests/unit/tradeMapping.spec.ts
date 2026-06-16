@@ -8,9 +8,11 @@ import { describe, it, expect } from 'vitest'
 import {
   fillToMarker,
   orderToPriceLines,
+  tradeToMarkers,
   type PriceLineSpec,
 } from '@/lib/tradeMapping'
 import type { OrderFilledData, OrderInitializedData } from '@/types/contract'
+import type { TradeRecord } from '@/api/trades'
 
 const BUY_FILL: OrderFilledData = {
   type: 'OrderFilled',
@@ -116,5 +118,71 @@ describe('orderToPriceLines', () => {
       ts_init: '1700000960000000000',
     }
     expect(orderToPriceLines(sl)[0].id).toContain('O-SL')
+  })
+})
+
+// --- 卡 D:進場 vs 出場 marker 視覺可區分 -----------------------------------
+//
+// round-trip trade 同時畫進場 + 出場兩 marker。過去兩者皆為箭頭、僅方向不同,
+// 視覺上像「同一筆畫了兩次」。本卡要求進場與出場「形狀」與「顏色」皆不同,
+// 並各帶可辨識的文字標(Entry / Exit)。
+
+const LONG_TRADE: TradeRecord = {
+  id: 7,
+  run_id: 73,
+  instrument_id: 'BTCUSDT-PERP.BINANCE',
+  side: 'LONG',
+  entry_price: '100',
+  exit_price: '110',
+  quantity: '0.5',
+  sl: null,
+  tp: null,
+  pnl: '5',
+  opened_at: '2024-01-01T00:00:00Z',
+  closed_at: '2024-01-01T01:00:00Z',
+}
+const SHORT_TRADE: TradeRecord = {
+  ...LONG_TRADE,
+  id: 8,
+  side: 'SHORT',
+  entry_price: '110',
+  exit_price: '100',
+  pnl: '5',
+}
+
+describe('tradeToMarkers 進出場視覺區分', () => {
+  it('回傳進場 + 出場兩個 marker', () => {
+    expect(tradeToMarkers(LONG_TRADE)).toHaveLength(2)
+  })
+
+  it('進場與出場 marker 的形狀不同(非兩個一樣的箭頭)', () => {
+    const [entry, exit] = tradeToMarkers(LONG_TRADE)
+    expect(entry.shape).not.toBe(exit.shape)
+  })
+
+  it('進場與出場 marker 的顏色不同', () => {
+    const [entry, exit] = tradeToMarkers(LONG_TRADE)
+    expect(entry.color).not.toBe(exit.color)
+  })
+
+  it('進場 marker 文字含 Entry、出場 marker 文字含 Exit', () => {
+    const [entry, exit] = tradeToMarkers(LONG_TRADE)
+    expect(entry.text).toContain('Entry')
+    expect(exit.text).toContain('Exit')
+  })
+
+  it('SHORT 進出場同樣形狀/顏色可區分', () => {
+    const [entry, exit] = tradeToMarkers(SHORT_TRADE)
+    expect(entry.shape).not.toBe(exit.shape)
+    expect(entry.color).not.toBe(exit.color)
+  })
+
+  it('進場箭頭指向部位方向(LONG 向上、SHORT 向下);出場用非箭頭形狀', () => {
+    const [longEntry] = tradeToMarkers(LONG_TRADE)
+    expect(longEntry.shape).toBe('arrowUp')
+    const [shortEntry, shortExit] = tradeToMarkers(SHORT_TRADE)
+    expect(shortEntry.shape).toBe('arrowDown')
+    // 出場形狀不是箭頭(circle/square),確保與進場箭頭視覺分離。
+    expect(['arrowUp', 'arrowDown']).not.toContain(shortExit.shape)
   })
 })
