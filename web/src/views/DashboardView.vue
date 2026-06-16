@@ -7,24 +7,33 @@
  */
 import { onMounted, onBeforeUnmount } from 'vue'
 import CandleChart from '@/components/chart/CandleChart.vue'
+import ChartControls from '@/components/controls/ChartControls.vue'
 import PositionsTable from '@/components/panels/PositionsTable.vue'
 import OrdersTable from '@/components/panels/OrdersTable.vue'
 import PnlWidget from '@/components/panels/PnlWidget.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
 import BacktestLauncher from '@/components/controls/BacktestLauncher.vue'
-import { fetchBars } from '@/api/bars'
 import { fetchBacktestRun } from '@/api/backtests'
-import { useMarketStore } from '@/stores/market'
 import { useBacktestRunStore, type RunStatus } from '@/stores/backtestRun'
+import { useChartSettingsStore } from '@/stores/chartSettings'
 import { useTradeSocket } from '@/composables/useTradeSocket'
+import { useChartData } from '@/composables/useChartData'
 
-const SYMBOL = 'BTCUSDT-PERP.BINANCE'
-const TIMEFRAME = '1m'
 const CHANNELS = ['bars', 'orders', 'fills', 'positions', 'pnl']
 
-const market = useMarketStore()
 const runStore = useBacktestRunStore()
+const settings = useChartSettingsStore()
 const socket = useTradeSocket({ channels: CHANNELS })
+const chartData = useChartData({ socket })
+
+/** 標的/週期切換:重載歷史 bars + 重訂串流(CandleChart 已在 watcher reset 圖)。 */
+async function onSwitch(sel: { symbol: string; timeframe: string }) {
+  try {
+    await chartData.switchTo(sel)
+  } catch (err) {
+    console.warn('切換標的/週期失敗', err)
+  }
+}
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -48,8 +57,7 @@ function onLaunched(runId: number) {
 
 onMounted(async () => {
   try {
-    const bars = await fetchBars({ symbol: SYMBOL, timeframe: TIMEFRAME })
-    market.setHistory(bars)
+    await chartData.reload()
   } catch (err) {
     // 歷史載入失敗不擋串流;記錄即可。
     console.warn('歷史 bars 載入失敗', err)
@@ -66,12 +74,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="dashboard">
     <header class="topbar">
-      <h1>JimQ — {{ SYMBOL }} {{ TIMEFRAME }}</h1>
+      <h1>JimQ — {{ settings.symbol }} {{ settings.timeframe }}</h1>
       <ConnectionStatus />
     </header>
     <BacktestLauncher @launched="onLaunched" />
     <main class="grid">
       <section class="chart-cell">
+        <ChartControls @switch="onSwitch" />
         <CandleChart />
       </section>
       <aside class="side">
@@ -91,6 +100,7 @@ onBeforeUnmount(() => {
 }
 .topbar h1 { font-size: 14px; color: #d1d4dc; margin: 0; font-weight: 600; }
 .grid { flex: 1; display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
-.chart-cell { min-height: 0; padding: 8px; }
+.chart-cell { min-height: 0; padding: 8px; display: flex; flex-direction: column; }
+.chart-cell > :last-child { flex: 1; min-height: 0; }
 .side { border-left: 1px solid #1c2230; overflow-y: auto; }
 </style>

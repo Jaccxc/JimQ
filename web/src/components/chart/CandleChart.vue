@@ -17,7 +17,9 @@ import { ChartController } from '@/lib/chartController'
 import { useMarketStore } from '@/stores/market'
 import { useFillsStore } from '@/stores/fills'
 import { useOrdersStore } from '@/stores/orders'
+import { useChartSettingsStore } from '@/stores/chartSettings'
 import { fillToMarker, orderToPriceLines } from '@/lib/tradeMapping'
+import { emaLineData } from '@/lib/ema'
 
 const containerRef = ref<HTMLDivElement | null>(null)
 // 非響應式:chart/series 實例不進 Vue 響應式。
@@ -27,6 +29,23 @@ let historyLoaded = false
 const market = useMarketStore()
 const fills = useFillsStore()
 const orders = useOrdersStore()
+const settings = useChartSettingsStore()
+
+/** 依目前設定重算並命令式套用 EMA fast/slow 疊圖(開→set、關→remove)。 */
+function syncEma() {
+  if (!controller) return
+  const bars = market.bars
+  if (settings.emaFast.enabled) {
+    controller.setEmaLine('fast', emaLineData(bars, settings.emaFast.period))
+  } else {
+    controller.removeEmaLine('fast')
+  }
+  if (settings.emaSlow.enabled) {
+    controller.setEmaLine('slow', emaLineData(bars, settings.emaSlow.period))
+  } else {
+    controller.removeEmaLine('slow')
+  }
+}
 
 onMounted(() => {
   if (!containerRef.value) return
@@ -38,7 +57,10 @@ onMounted(() => {
     historyLoaded = true
   }
 
-  // bars:length 變化 → 首批 setHistory,之後逐根 update。
+  // 初次若已有歷史,套一次 EMA。
+  syncEma()
+
+  // bars:length 變化 → 首批 setHistory,之後逐根 update;每次同步 EMA。
   watch(
     () => market.bars.length,
     (len, prev) => {
@@ -49,6 +71,7 @@ onMounted(() => {
       } else if (len > (prev ?? 0)) {
         controller.updateBar(market.bars[len - 1])
       }
+      syncEma()
     },
   )
   // 同 time 更新最後一根(length 不變但內容變)。
@@ -57,8 +80,31 @@ onMounted(() => {
     () => {
       if (controller && historyLoaded && market.bars.length) {
         controller.updateBar(market.bars[market.bars.length - 1])
+        syncEma()
       }
     },
+  )
+
+  // 切換標的 / 週期:reset 重用 chart 實例(不重建 series/不洩漏),
+  // 待新歷史進來時由 bars watcher 重畫。
+  watch(
+    () => [settings.symbol, settings.timeframe].join('|'),
+    () => {
+      if (!controller) return
+      controller.reset()
+      historyLoaded = false
+    },
+  )
+
+  // EMA 開關 / 週期變更:即時重算疊圖。
+  watch(
+    () => [
+      settings.emaFast.enabled,
+      settings.emaFast.period,
+      settings.emaSlow.enabled,
+      settings.emaSlow.period,
+    ].join('|'),
+    () => syncEma(),
   )
 
   // fills → markers。
