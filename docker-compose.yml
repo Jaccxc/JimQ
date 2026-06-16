@@ -138,6 +138,35 @@ services:
       - catalog-data:/data/catalog
     restart: "no"
 
+  # --- engine command worker(卡 #20 W1;控制平面常駐消費端)-------------------
+  # 常駐 worker:XREADGROUP 消費 Redis command stream(jimq:commands, bus DB0),
+  # 收到 run_backtest 命令時跑啟用 Redis Streams 的 backtest、發布 LATEST_STREAM_KEY、
+  # 以 app 級 SQLAlchemy 回寫 backtest_run 狀態(連 postgres)。復用 engine 映像,
+  # 覆寫 entrypoint 跑 worker。localhost-only(鐵律 4)。
+  command-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/engine/Dockerfile
+    container_name: jimq-command-worker
+    entrypoint: ["python", "scripts/run_command_worker.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1234}
+      POSTGRES_DB: ${POSTGRES_DB:-jimq}
+      JIMQ_CATALOG_PATH: /data/catalog
+    volumes:
+      - catalog-data:/data/catalog
+    restart: unless-stopped
+
 volumes:
   redis-data:
   postgres-data:
