@@ -88,7 +88,8 @@ export function useTradeSocket(opts: TradeSocketOptions): TradeSocket {
       } catch {
         return
       }
-      dispatchMessage(msg)
+      // 帶 scope → 路由到對應命名空間 store(Live/Backtest 互不污染)。
+      dispatchMessage(msg, opts.scope ?? 'live')
       // live 分界:連線穩定,歸零退避計數。
       if ((msg as { type?: string }).type === 'live') {
         useConnectionStore().resetReconnect()

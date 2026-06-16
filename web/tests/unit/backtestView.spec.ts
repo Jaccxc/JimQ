@@ -99,13 +99,24 @@ describe('BacktestView 單一主圖版面', () => {
     const w = mountView()
     await flushPromises()
     calls.setHistory.mockClear()
-    // 模擬 scope=backtest 串流把 bar 推進 market store。
-    const market = useMarketStore()
+    // 模擬 scope=backtest 串流把 bar 推進 **backtest 命名空間** market store
+    // (真 bug 修復:BacktestView 主圖讀 'backtest' 命名空間,與 live 隔離)。
+    const market = useMarketStore('backtest')
     market.setHistory([bar(1704067200), bar(1704070800)])
     await flushPromises()
-    // 主圖(ReplayChart)以 live 串流 bars 重畫(setHistory 收到串流的 2 根)。
+    // 主圖(ReplayChart)以 backtest 串流 bars 重畫(setHistory 收到串流的 2 根)。
     const last = calls.setHistory.mock.calls.at(-1)
     expect(last).toBeTruthy()
     expect(last![0]).toHaveLength(2)
+  })
+
+  it('隔離:推進 live 命名空間 bars 不會餵進 backtest 主圖(真 bug 修復)', async () => {
+    mountView()
+    await flushPromises()
+    const sinceLive = calls.setHistory.mock.calls.length
+    // 往 'live' 命名空間灌 bars(模擬 Live 頁串流)→ 不該驅動 backtest 主圖重畫。
+    useMarketStore('live').setHistory([bar(1704067200), bar(1704070800), bar(1704074400)])
+    await flushPromises()
+    expect(calls.setHistory.mock.calls.length).toBe(sinceLive)
   })
 })
