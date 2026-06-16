@@ -93,3 +93,58 @@ async def test_publish_command_xadds_json_envelope_to_command_stream():
     assert fields["command_type"] == COMMAND_TYPE_RUN_BACKTEST
     # JSON payload 確實是字串。
     assert json.loads(fields["payload"])["run_id"] == 42
+
+
+# --- 卡 #24 (W5):控制命令發布端 ------------------------------------------
+
+def test_build_start_command_assembles_control_envelope():
+    from jimq_core.constants import COMMAND_TYPE_START_STRATEGY
+    from jimq_core.schemas import ControlCommand
+
+    from app.services.command_publisher import build_control_command
+
+    cmd = build_control_command(
+        command_type=COMMAND_TYPE_START_STRATEGY,
+        strategy_id="ema_cross",
+        params={"fast_period": 3},
+        correlation_id="corr-start",
+    )
+    assert isinstance(cmd, ControlCommand)
+    assert cmd.command_type == COMMAND_TYPE_START_STRATEGY
+    assert cmd.strategy_id == "ema_cross"
+    assert cmd.params == {"fast_period": 3}
+    assert cmd.correlation_id == "corr-start"
+
+
+def test_build_kill_command_is_global_and_autogenerates_correlation_id():
+    from jimq_core.constants import COMMAND_TYPE_KILL
+    from jimq_core.schemas import ControlCommand
+
+    from app.services.command_publisher import build_control_command
+
+    cmd = build_control_command(command_type=COMMAND_TYPE_KILL)
+    assert isinstance(cmd, ControlCommand)
+    assert cmd.command_type == COMMAND_TYPE_KILL
+    assert cmd.strategy_id is None
+    assert cmd.correlation_id  # 自動生成
+
+
+async def test_publish_control_command_xadds_to_command_stream():
+    from jimq_core.constants import COMMAND_STREAM_KEY, COMMAND_TYPE_STOP_STRATEGY
+    from jimq_core.schemas import ControlCommand
+
+    from app.services.command_publisher import build_control_command
+
+    client = _FakeRedis()
+    cmd = build_control_command(
+        command_type=COMMAND_TYPE_STOP_STRATEGY,
+        strategy_id="ema_cross",
+        correlation_id="corr-stop",
+    )
+    await publish_command(client, cmd)
+
+    key, fields = client.entries[0]
+    assert key == COMMAND_STREAM_KEY
+    assert fields["command_type"] == COMMAND_TYPE_STOP_STRATEGY
+    restored = ControlCommand.model_validate_json(fields["payload"])
+    assert restored == cmd
