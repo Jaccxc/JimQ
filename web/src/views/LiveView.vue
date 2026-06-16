@@ -12,6 +12,7 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import CandleChart from '@/components/chart/CandleChart.vue'
 import ChartControls from '@/components/controls/ChartControls.vue'
+import StrategyControls from '@/components/controls/StrategyControls.vue'
 import PositionsTable from '@/components/panels/PositionsTable.vue'
 import PnlWidget from '@/components/panels/PnlWidget.vue'
 import { useChartSettingsStore } from '@/stores/chartSettings'
@@ -55,6 +56,7 @@ onBeforeUnmount(() => {
     <header class="topbar">
       <h1>Live — {{ settings.symbol }} {{ settings.timeframe }}</h1>
     </header>
+    <StrategyControls />
     <main class="grid">
       <section class="chart-cell">
         <ChartControls @switch="onSwitch" />
