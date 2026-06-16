@@ -28,7 +28,9 @@ import { useChartData } from '@/composables/useChartData'
 import { fetchLiveBars } from '@/api/bars'
 import type { FetchBarsParams } from '@/api/bars'
 
-const CHANNELS = ['bars', 'orders', 'fills', 'positions', 'pnl']
+// 卡 B(Live 次秒 tick):額外訂 'trades' → 逐筆成交聚合到形成中那根 K 線
+// (⛔ 純視覺,不進策略;策略仍走 bars 收線)。Backtest 頁不訂 trades(無噪音)。
+const CHANNELS = ['bars', 'trades', 'orders', 'fills', 'positions', 'pnl']
 /** Live 頁初始載入根數(近期真 klines;與 live WS 串流接續)。 */
 const LIVE_BARS_LIMIT = 1000
 

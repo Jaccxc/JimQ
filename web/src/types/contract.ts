@@ -12,7 +12,7 @@
  */
 
 /** WS 多工 channel 名稱(共用契約)。 */
-export type Channel = 'bars' | 'orders' | 'fills' | 'positions' | 'pnl'
+export type Channel = 'bars' | 'trades' | 'orders' | 'fills' | 'positions' | 'pnl'
 
 /** 單根 K 線傳輸物件(Lightweight Charts 對齊)。OHLCV 以字串保留交易所精度。 */
 export interface BarDTO {
@@ -63,6 +63,19 @@ export function isEnvelope(m: WsMessage): m is StreamEnvelope {
 }
 
 // --- 事件 data 子型別(Nautilus 透傳,帶 type;以實測 payload 形狀為準)---
+
+/**
+ * 卡 B(Live 次秒 tick):TradeTick 逐筆成交 data(consumer 正規化補 time)。
+ * 前端用 time(epoch 秒)+ price 聚合到形成中那根 1m K 線(⛔ 純視覺,不進策略)。
+ */
+export interface TradeData {
+  type: 'TradeTick'
+  /** epoch 秒(consumer 由 ts_init 補;對齊 LWC UTCTimestamp）。 */
+  time: number
+  /** 成交價(字串保留交易所精度;前端 parseFloat)。 */
+  price: string
+  [k: string]: unknown
+}
 
 export interface OrderInitializedData {
   type: 'OrderInitialized'

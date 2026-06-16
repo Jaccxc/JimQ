@@ -14,6 +14,7 @@ import {
   isLiveMarker,
   type WsMessage,
   type BarDTO,
+  type TradeData,
   type PositionData,
   type OrderInitializedData,
   type OrderFilledData,
@@ -46,6 +47,12 @@ export function dispatchMessage(msg: WsMessage): void {
     case 'bars':
       useMarketStore().applyBar(data as unknown as BarDTO)
       break
+    case 'trades': {
+      // 卡 B:逐筆成交 → 聚合到形成中那根 1m K 線(⛔ 純視覺,不碰交易 stores)。
+      const t = data as unknown as TradeData
+      useMarketStore().applyTick({ time: t.time, price: t.price })
+      break
+    }
     case 'positions':
       usePositionsStore().upsert(data as unknown as PositionData)
       break
