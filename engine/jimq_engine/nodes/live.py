@@ -225,12 +225,18 @@ def ema_cross_strategy_config(
     trade_size: str = DEFAULT_PAPER_TRADE_SIZE,
     fast_period: int = DEFAULT_FAST_PERIOD,
     slow_period: int = DEFAULT_SLOW_PERIOD,
+    use_bracket: bool = False,
 ) -> ImportableStrategyConfig:
     """ema_cross 策略的 ImportableStrategyConfig(與 backtest 共用同碼)。
 
     只換 adapter/設定(live testnet vs backtest catalog),策略邏輯不變 →
     research↔live parity。小額 paper 單(0.001 BTC),短 EMA 週期使近期 1m
     bar 上更易觸發交叉,利 round-trip 驗證。
+
+    ``use_bracket=False``(live 預設):下純 MARKET 進場單。Binance USDT-M Futures
+    adapter 不支援 bracket 的 OCO 條件單(本地 RiskEngine 會 OrderDenied
+    ``UNSUPPORTED_OCO_CONDITIONAL_ORDERS``,單根本送不到 venue),故 live testnet
+    路徑用純市價單才能真送達成交完成 round-trip。交叉偵測邏輯與 backtest 共用 → parity。
     """
     bar_type = f"{BTCUSDT_PERP_BINANCE_ID}-{bar_spec}"
     return ImportableStrategyConfig(
@@ -242,6 +248,7 @@ def ema_cross_strategy_config(
             "fast_period": fast_period,
             "slow_period": slow_period,
             "trade_size": trade_size,
+            "use_bracket": use_bracket,
         },
     )
 
@@ -259,6 +266,7 @@ def build_live_trade_node_config(
     trader_id: str = LIVE_TRADER_ID,
     environment=None,  # noqa: ANN001 — BinanceEnvironment;預設 TESTNET
     reconciliation: bool = True,
+    use_bracket: bool = False,
 ) -> TradingNodeConfig:
     """組裝 **live 交易節點** ``TradingNodeConfig``(Binance testnet;下 paper 單)。
 
@@ -306,6 +314,7 @@ def build_live_trade_node_config(
                 trade_size=trade_size,
                 fast_period=fast_period,
                 slow_period=slow_period,
+                use_bracket=use_bracket,
             ),
         ],
     )
