@@ -120,6 +120,151 @@ def extract_trades(engine: Any, *, run_id: int) -> list[dict[str, Any]]:
                 "closed_at": _ns_to_dt(pos.ts_closed),
             }
         )
+    if trades:
+        return trades
+
+    # 退路:NETTING OMS 下整個 instrument 只有一個永不歸零的 position →
+    # positions_closed() 為空,即使中途進出數百次。改從 fill 流重建 round-trip,
+    # 讓進出場 marker + 權益曲線不再是空的(這是「無權益曲線」的根因)。
+    return _round_trips_from_engine_fills(engine, run_id=run_id)
+
+
+def _fill_sort_key(f: Any) -> int:
+    return int(getattr(f, "ts_event", 0))
+
+
+def round_trips_from_fills(
+    fills: Sequence[Any], *, instrument_id: str, run_id: int
+) -> list[dict[str, Any]]:
+    """從**有序 fill 流**重建 round-trip 成交(NETTING 單一部位永不歸零時用)。
+
+    NETTING OMS 下整個 instrument 只有一個 position 物件,跑完常仍持倉 →
+    ``positions_closed()`` 為空,即使中途進出數百次。此處改以 fill 流還原:
+
+    - 追蹤帶號淨部位(多 +、空 -)。淨部位由平倉(歸零)或反手(穿越零點)時,
+      把該段切成一筆 round-trip,實現 PnL = (出場均價 - 進場均價) * 量 * 方向號。
+    - 進場以量加權均價;反手時超出歸零的剩餘量開新反向 round-trip。
+    - 跑完仍持倉的尾段也輸出一筆(exit=最後 fill 價,pnl=0)使進場 marker 不漏。
+
+    PnL 不含手續費(權益曲線近似;成交價差為主訊號)。價量以 ``str`` 化交給
+    Numeric 欄位(避免 float 精度)。
+    """
+    ordered = sorted(fills, key=_fill_sort_key)
+    trades: list[dict[str, Any]] = []
+
+    # 目前 round-trip 狀態(None = flat)。
+    net = Decimal("0")  # 帶號淨部位
+    entry_notional = Decimal("0")  # 進場量加權名目(abs)
+    entry_qty = Decimal("0")  # 進場累計量(abs)
+    exit_notional = Decimal("0")  # 平倉量加權名目(abs)
+    exit_qty = Decimal("0")  # 平倉累計量(abs)
+    opened_ns: int | None = None
+    last_ns: int = 0
+
+    def _flush(closed_ns: int) -> None:
+        nonlocal net, entry_notional, entry_qty, exit_notional, exit_qty, opened_ns
+        if entry_qty == 0 or opened_ns is None:
+            net = Decimal("0")
+            entry_notional = entry_qty = exit_notional = exit_qty = Decimal("0")
+            opened_ns = None
+            return
+        side = SIDE_LONG if net_sign_at_open > 0 else SIDE_SHORT
+        entry_px = entry_notional / entry_qty
+        if exit_qty > 0:
+            exit_px = exit_notional / exit_qty
+            direction = Decimal("1") if side == SIDE_LONG else Decimal("-1")
+            pnl = (exit_px - entry_px) * exit_qty * direction
+        else:
+            exit_px = entry_px  # 未平倉尾段:以進場價當出場(pnl=0)。
+            pnl = Decimal("0")
+        trades.append(
+            {
+                "run_id": run_id,
+                "instrument_id": instrument_id,
+                "side": side,
+                "entry_price": str(entry_px),
+                "exit_price": str(exit_px),
+                "quantity": str(entry_qty),
+                "sl": None,
+                "tp": None,
+                "pnl": str(pnl),
+                "opened_at": _ns_to_dt(opened_ns),
+                "closed_at": _ns_to_dt(closed_ns),
+            }
+        )
+        net = Decimal("0")
+        entry_notional = entry_qty = exit_notional = exit_qty = Decimal("0")
+        opened_ns = None
+
+    net_sign_at_open = 0
+    for f in ordered:
+        qty = Decimal(str(f.last_qty))
+        px = Decimal(str(f.last_px))
+        ts = int(getattr(f, "ts_event", 0))
+        last_ns = ts
+        signed = qty if getattr(f, "is_buy", False) else -qty
+
+        if net == 0:
+            # 開新 round-trip。
+            net = signed
+            net_sign_at_open = 1 if signed > 0 else -1
+            entry_notional = px * qty
+            entry_qty = qty
+            opened_ns = ts
+            continue
+
+        same_dir = (net > 0 and signed > 0) or (net < 0 and signed < 0)
+        if same_dir:
+            net += signed
+            entry_notional += px * qty
+            entry_qty += qty
+            continue
+
+        # 反方向:平倉(可能歸零或反手)。
+        closing = min(qty, abs(net))
+        exit_notional += px * closing
+        exit_qty += closing
+        new_net = net + signed
+        if new_net == 0:
+            _flush(ts)
+        elif (new_net > 0) != (net > 0):
+            # 反手:先收尾舊段,剩餘量開新反向段。
+            _flush(ts)
+            remainder = abs(new_net)
+            net = new_net
+            net_sign_at_open = 1 if new_net > 0 else -1
+            entry_notional = px * remainder
+            entry_qty = remainder
+            opened_ns = ts
+        else:
+            net = new_net  # 部分平倉,仍同向持倉。
+
+    if entry_qty > 0 and opened_ns is not None:
+        _flush(last_ns)
+    return trades
+
+
+def _round_trips_from_engine_fills(engine: Any, *, run_id: int) -> list[dict[str, Any]]:
+    """從引擎 cache 的所有 OrderFilled 事件(依 instrument 分組)重建 round-trip。
+
+    供 NETTING 退路:positions_closed() 為空但確有成交時,從 fill 流還原進出場。
+    """
+    cache = engine.cache
+    fills_by_instrument: dict[str, list[Any]] = {}
+    try:
+        orders = cache.orders()
+    except Exception:  # noqa: BLE001
+        return []
+    for order in orders:
+        for ev in getattr(order, "events", []):
+            if type(ev).__name__ != "OrderFilled":
+                continue
+            iid = str(getattr(ev, "instrument_id", ""))
+            fills_by_instrument.setdefault(iid, []).append(ev)
+
+    trades: list[dict[str, Any]] = []
+    for iid, fills in fills_by_instrument.items():
+        trades.extend(round_trips_from_fills(fills, instrument_id=iid, run_id=run_id))
     return trades
 
 
