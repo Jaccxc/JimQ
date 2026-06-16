@@ -12,13 +12,8 @@
  * 直接量,故以樣式契約驗證)。
  */
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
-// vitest 由 web/ 目錄執行;以 cwd 解析 src 來源檔。
-function read(rel: string): string {
-  return readFileSync(resolve(process.cwd(), 'src', rel), 'utf8')
-}
+// 以 Vite ?raw 取得 SFC 原始碼(含 <style>),驗全域 dark theme 文字色契約。
+import appSource from '@/App.vue?raw'
 
 /** 從 CSS 文字抓某 selector 區塊內 color 宣告值(取最後一個全域 <style> 內出現)。 */
 function colorOf(css: string, selector: string): string | null {
@@ -42,7 +37,7 @@ function isVisibleOnDark(color: string | null): boolean {
 }
 
 describe('dark theme 文字可見性', () => {
-  const appCss = read('App.vue')
+  const appCss = appSource
 
   it('App.vue 全域為 body 設淺色 base text(非黑)', () => {
     const c = colorOf(appCss, 'body')
