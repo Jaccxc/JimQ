@@ -1,8 +1,9 @@
 """卡 #27 (P2-S1) — Binance testnet **live 資料節點** entrypoint(可起停)。
 
 連 Binance USDT-M Futures **testnet**,訂閱 BTCUSDT-PERP 即時 bar,把事件序列化
-落地**本機 Redis Streams**(DB0),並把實際 stream key 發布到
-``jimq:latest_stream_key``(供 API ``@latest`` 解析、前端 Live 頁即時訂閱)。
+落地**本機 Redis Streams**(DB0),並把實際 stream key 發布到 **live scope**
+latest-key ``jimq:live:latest_stream_key``(卡 A;供 API live scope supervisor
+解析、前端 Live 頁即時訂閱,與 backtest 隔離)。
 mode badge 依此判定 LIVE-TESTNET(節點在跑 = live 來源)。
 
 用法:

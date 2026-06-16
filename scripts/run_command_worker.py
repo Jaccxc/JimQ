@@ -2,8 +2,9 @@
 
 啟動控制平面消費端:連本機 Redis(DB0)消費 command stream
 (``jimq:commands``),收到 run_backtest 命令時跑啟用 Redis Streams 的 backtest、
-把事件 stream key 發布到 ``jimq:latest_stream_key``(供 API @latest 解析、前端
-即時訂閱),並以 app 級 SQLAlchemy 回寫 backtest_run 狀態。
+把事件 stream key 發布到 **backtest scope** latest-key
+``jimq:backtest:latest_stream_key``(卡 A;供 API backtest scope supervisor 解析、
+前端 Backtest 頁即時訂閱,不污染 Live),並以 app 級 SQLAlchemy 回寫 backtest_run 狀態。
 
 用法:
     uv run python scripts/run_command_worker.py
