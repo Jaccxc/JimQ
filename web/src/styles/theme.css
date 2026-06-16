@@ -1,0 +1,132 @@
+/*
+ * JimQ 設計系統底座(改版 S1) — full glassmorphism native + Apple。
+ * Tailwind v4 CSS-first：@import "tailwindcss" + @theme 落入全套 design token。
+ * 單一真相來源:後續頁面換皮一律引用此處 token,勿散落 magic number。
+ *
+ * 範圍備註:
+ * - 圖表「周邊」(面板/header/表格/控制列/表單)玻璃化;
+ * - K 線(蠟燭)圖內部不 styling;非蠟燭資料圖(權益/PnL)才用玻璃配色 token。
+ */
+@import 'tailwindcss';
+
+/* @fontsource-variable/inter 的字體實際在 main.ts import(woff2);此處只定義 family 變數。 */
+
+@theme {
+  /* ---- 背景(更深讓玻璃高光明顯) ---- */
+  --color-bg: #0b0e14;
+  --color-bg-2: #11151d;
+
+  /* ---- 三層玻璃 ---- */
+  /* L1 面板 */
+  --glass-l1-bg: rgba(22, 28, 40, 0.55);
+  --glass-l1-blur: 16px;
+  --glass-l1-saturate: 150%;
+  --glass-l1-border: rgba(255, 255, 255, 0.1);
+  --glass-l1-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --glass-l1-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  /* L2 浮層(dialog/popover/select) */
+  --glass-l2-bg: rgba(28, 34, 48, 0.72);
+  --glass-l2-blur: 24px;
+  /* L3 header / toolbar */
+  --glass-l3-bg: rgba(17, 21, 29, 0.6);
+  --glass-l3-blur: 12px;
+  /* fallback(不支援 backdrop-filter):不透明 */
+  --glass-fallback-bg: rgba(22, 28, 40, 0.92);
+
+  /* ---- 文字 ---- */
+  --color-text: #e8eaed; /* 主 */
+  --color-text-muted: #9aa3b2; /* 次 */
+  --color-text-faint: #6b7280; /* 弱 */
+
+  /* ---- 強調(Apple 藍) ---- */
+  --color-accent: #0a84ff;
+
+  /* ---- 漲跌(實心不透明,直接套數字色;不在玻璃上疊半透明色塊) ---- */
+  --color-up: #26d07c;
+  --color-down: #ff5c5c;
+  --color-up-pill: rgba(38, 208, 124, 0.16);
+  --color-down-pill: rgba(255, 92, 92, 0.16);
+
+  /* ---- 字體 ---- */
+  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* ---- 圓角 ---- */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* ---- 間距(4 基準) ---- */
+  --spacing: 4px;
+
+  /* ---- 動效 ---- */
+  --ease-glass: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-slow: 300ms;
+}
+
+/* ---- 全域基底 ---- */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+/* 標題字距 -0.01em(已在 body 套全域,此處保留語意化標題色由 App.vue 全域處理)。 */
+
+/* 數字等寬:表格/價格/PnL 用 .tabular-nums。 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 玻璃 util(供自建玻璃元件與後續頁面覆用) ---- */
+.glass-l1 {
+  background: var(--glass-l1-bg);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-l1-shadow), var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+}
+
+.glass-l2 {
+  background: var(--glass-l2-bg);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-l1-shadow), var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l2-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l2-blur)) saturate(var(--glass-l1-saturate));
+}
+
+.glass-l3 {
+  background: var(--glass-l3-bg);
+  border-bottom: 1px solid var(--glass-l1-border);
+  box-shadow: var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l3-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l3-blur)) saturate(var(--glass-l1-saturate));
+}
+
+/* 不支援 backdrop-filter → 退回不透明,保對比 ≥4.5:1。 */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-l1,
+  .glass-l2,
+  .glass-l3 {
+    background: var(--glass-fallback-bg);
+  }
+}
+
+/* 尊重 prefers-reduced-motion:停掉過場動畫。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
