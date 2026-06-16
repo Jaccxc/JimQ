@@ -106,12 +106,13 @@ def test_testnet_paper_order_round_trip_lands_in_redis():
     client = redis.Redis(host="localhost", port=6379, db=REDIS_BUS_DB)
     client.ping()
 
-    # 短 EMA 週期使近期 1m bar 上更易觸發交叉 → 下 paper 單。
+    # 極短 EMA 週期(fast=1=最新 close、slow=2)使近期 1m bar 幾乎每次方向變動就觸發
+    # 交叉 → 策略可在數分鐘內下一筆新 paper 單(策略碼不變,僅參數;parity 不受影響)。
     config = build_live_trade_node_config(
         api_key=api_key,
         api_secret=api_secret,
-        fast_period=2,
-        slow_period=4,
+        fast_period=1,
+        slow_period=2,
     )
     # ⛔ 驗 exec client 確為 testnet(非真錢)。
     ec = config.exec_clients[str(BINANCE)]
