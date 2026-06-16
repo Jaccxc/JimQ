@@ -115,3 +115,24 @@ cd web && npm run test && npm run build && node scripts/verify-p2s1.mjs
   重跑 `JIMQ_RUN_TESTNET=1` 整合測試確認 bar 落地。
 - Binance Futures 公開市場資料(K 線 WS)本身不需簽章;若僅要無金鑰公開行情,後續可
   評估改 instrument provider 走純 public 載入路徑(本卡未做,維持 adapter 預設)。
+
+---
+
+## 7. paper 下單的風控 / kill / 對帳(卡 #29 / P2-S3)
+
+`scripts/run_live_trade.py` 在 testnet paper 下單時掛 Nautilus 原生 `LiveRiskEngineConfig`:
+
+- `--max-notional`(預設 **200 USDT**)= `max_notional_per_order`。**⚠️ 上游限制**:
+  nautilus_trader 1.228 名目風控對 **MARGIN 帳戶 early-return**(原碼 "TODO: risk controls
+  for margin"),Binance USDT-M Futures = MARGIN → 名目上限**目前期貨 testnet 上不觸發
+  OrderDenied**;config 欄位已 forward-compatible 掛好,Nautilus 補上即生效。名目攔截
+  真行為已用 spot+CASH backtest 確定性驗(`engine/tests/test_risk_engine_deny.py`)。
+- `--max-order-submit-rate`(預設 **10/00:00:01** = 10 單/秒)= `max_order_submit_rate`
+  throttler,**所有帳戶型別生效**(含期貨)。超頻被節流。`bypass=False` 不可繞過。
+- **Kill switch**:web header 全域 KILL(或 `POST /api/v1/kill`)→ command stream → engine
+  worker → `NodeController.kill()`,每策略依序 **cancel_all_orders(撤未成交)→
+  close_all_positions(平倉)→ stop**,節點標記 KILLED。不留掛單在 venue。
+- **對帳**:`LiveExecEngineConfig.reconciliation=True`(預設開),節點重啟與 venue 對齊
+  既有部位/掛單(以 `strategy_id=EXTERNAL` 重發事件)。
+
+控制列(`StrategyControls`)顯示節點狀態徽章(RUNNING/KILLED)+ 生效中風控摘要。

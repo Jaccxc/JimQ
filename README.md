@@ -12,8 +12,9 @@
 - ✅ **Phase 2 live**(#27/#30/#28):Binance USDT-M Futures **testnet** 真即時 BTCUSDT-PERP K 線(Live 頁)+ ema_cross **testnet paper 下單**(訂單/成交/部位/PnL)。⛔ 只 testnet 假錢。
 - ⏳ **下一步**:P2-S3(#29)live 節點控制/風控/對帳。**真錢 live 一律停等明示。**
 
-> **怎麼啟動 → 看 [`docs/runbooks/20260616-quickstart.md`](./docs/runbooks/20260616-quickstart.md)**
-> (四種模式:回測 / 真即時資料 / testnet paper 下單 / 研究)。
+> **怎麼啟動 → 用 `make`**(輸入 `make` 看清單):`make up` 起棧 → `make exp` 跑回測 →
+> 開 http://127.0.0.1:8080。testnet 即時/下單見 `make live` / `make paper`。
+> 細節:[`docs/runbooks/20260616-quickstart.md`](./docs/runbooks/20260616-quickstart.md)。
 > 截圖佐證:`web/artifacts/real-e2e-dashboard.png`(回測)、`p2s1b-live-candles.png`(真即時)、`p2s2-paper-trade-live.png`(paper 下單)。
 
 ## 全棧端到端 demo(一鍵)

@@ -1,5 +1,10 @@
 # JimQ Phase 1 — 端到端 Demo Runbook(卡 #10)
 
+> 👉 **只想快點跑起來?用 `make`**(輸入 `make` 看清單),或看
+> [`runbooks/20260616-quickstart.md`](./runbooks/20260616-quickstart.md)。
+> 本檔是 Phase 1 demo 的**底層細節說明**(各步驟在做什麼),平常不必逐步照做。
+
+
 從零到在瀏覽器看到 **真實 BTCUSDT-PERP K 線 + 由真 backtest order/fill 事件驅動的
 進場 marker / SL·TP price line / 即時 PnL·部位**。整套以 `docker-compose` 跑,
 redis / postgres / api / web 為長駐服務,engine 為一次性 demo job。
