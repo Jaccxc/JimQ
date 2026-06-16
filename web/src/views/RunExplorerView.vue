@@ -10,10 +10,13 @@
  */
 import { onMounted } from 'vue'
 import ReplayChart from '@/components/chart/ReplayChart.vue'
-import { useRunExplorer } from '@/composables/useRunExplorer'
+import { useRunExplorer, type RunExplorerApi } from '@/composables/useRunExplorer'
 import type { SortKey } from '@/stores/backtestExplorer'
 
-const ex = useRunExplorer()
+// api 可注入(測試決定論);預設用真實 REST client。
+const props = defineProps<{ api?: Partial<RunExplorerApi> }>()
+
+const ex = useRunExplorer({ api: props.api })
 const { store } = ex
 
 const METRIC_COLUMNS: { key: SortKey; label: string }[] = [
@@ -88,7 +91,12 @@ onMounted(() => {
         {{ store.selectedRun.instrument_id }} {{ store.selectedRun.timeframe }}
       </h2>
       <h2 v-else>選一個 run 看 K 線與進出場</h2>
-      <ReplayChart :bars="ex.bars.value" :markers="ex.markers.value" :price-lines="ex.priceLines.value" />
+      <ReplayChart
+        :bars="ex.bars.value"
+        :markers="ex.markers.value"
+        :price-lines="ex.priceLines.value"
+        :equity="ex.equity.value"
+      />
     </div>
   </section>
 </template>
