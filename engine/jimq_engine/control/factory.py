@@ -20,8 +20,9 @@ from typing import Any, Callable
 from nautilus_trader.config import StrategyConfig
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.trading.strategy import Strategy
 
-from jimq_engine.strategies.ema_cross import EMACrossConfig
+from jimq_engine.strategies.ema_cross import EMACross, EMACrossConfig
 
 
 def _build_ema_cross(
@@ -44,6 +45,11 @@ _REGISTRY: dict[str, Callable[[InstrumentId, BarType, dict[str, Any]], StrategyC
     "ema_cross": _build_ema_cross,
 }
 
+# 策略名 -> Strategy 類別(config 1:1 對應的策略實作)。
+_STRATEGY_CLASSES: dict[str, type[Strategy]] = {
+    "ema_cross": EMACross,
+}
+
 
 def known_strategies() -> tuple[str, ...]:
     """回傳已註冊策略名(供 web launcher 下拉對齊)。"""
@@ -64,3 +70,21 @@ def build_strategy_config(
     iid = instrument_id if isinstance(instrument_id, InstrumentId) else InstrumentId.from_str(instrument_id)
     bt = bar_type if isinstance(bar_type, BarType) else BarType.from_str(bar_type)
     return builder(iid, bt, params)
+
+
+def build_strategy(
+    name: str,
+    *,
+    instrument_id: str | InstrumentId,
+    bar_type: str | BarType,
+    params: dict[str, Any],
+) -> Strategy:
+    """依策略名建一個**已實例化**的 Nautilus ``Strategy``。未知名拋 ``ValueError``。
+
+    command worker 用此把命令的 strategy 名 + params 直接變成可掛上引擎的策略。
+    """
+    config = build_strategy_config(
+        name, instrument_id=instrument_id, bar_type=bar_type, params=params
+    )
+    cls = _STRATEGY_CLASSES[name]  # name 已在 build_strategy_config 驗證存在。
+    return cls(config=config)

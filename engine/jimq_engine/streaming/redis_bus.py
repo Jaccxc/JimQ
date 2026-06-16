@@ -36,6 +36,7 @@ from nautilus_trader.model.enums import AccountType, OmsType
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Money
+from nautilus_trader.trading.strategy import Strategy
 
 from jimq_core.constants import REDIS_BUS_DB
 from jimq_engine.nodes.backtest import default_fill_model
@@ -89,10 +90,10 @@ def stream_key_for(engine: BacktestEngine, *, streams_prefix: str = STREAMS_PREF
     return f"trader-{engine.trader_id}:{engine.instance_id}:{streams_prefix}"
 
 
-def build_streaming_engine(
+def build_streaming_engine_with_strategy(
     instrument: Instrument,
     bars: Sequence[Bar],
-    config: EMACrossConfig,
+    strategy: Strategy,
     *,
     trader_id: str = "BACKTESTER-001",
     starting_usdt: Decimal = Decimal("1_000_000"),
@@ -102,11 +103,13 @@ def build_streaming_engine(
     redis_port: int = 6379,
     streams_prefix: str = STREAMS_PREFIX,
 ) -> BacktestEngine:
-    """組裝並 run 一個**啟用 Redis Streams 外部串流**的 BacktestEngine。
+    """組裝並 run 一個**啟用 Redis Streams 外部串流**的 BacktestEngine——策略類型無關。
 
-    與 ``nodes.backtest.build_engine`` 同樣的確定性 venue(NETTING + MARGIN +
-    固定種子 FillModel),額外掛上 ``streaming_message_bus_config()``,使事件
-    序列化落地本機 Redis Streams。回傳已 run 完的引擎(供取報表 / 取 stream key)。
+    接受任意已實例化的 Nautilus ``Strategy``(EMA、模型驅動推論策略…;C8 可插拔),
+    與 ``nodes.backtest`` 同樣的確定性 venue(NETTING + MARGIN + 固定種子 FillModel),
+    額外掛上 ``streaming_message_bus_config()`` 使事件序列化落地本機 Redis Streams。
+    回傳已 run 完的引擎(供取報表 / 取 stream key)。卡 #20 command worker 用此跑
+    factory 建出的任意策略。
     """
     engine_config = BacktestEngineConfig(
         trader_id=trader_id,
@@ -129,6 +132,34 @@ def build_streaming_engine(
     )
     engine.add_instrument(instrument)
     engine.add_data(list(bars))
-    engine.add_strategy(EMACross(config=config))
+    engine.add_strategy(strategy)
     engine.run()
     return engine
+
+
+def build_streaming_engine(
+    instrument: Instrument,
+    bars: Sequence[Bar],
+    config: EMACrossConfig,
+    *,
+    trader_id: str = "BACKTESTER-001",
+    starting_usdt: Decimal = Decimal("1_000_000"),
+    leverage: Decimal = Decimal("10"),
+    random_seed: int = 42,
+    redis_host: str = "localhost",
+    redis_port: int = 6379,
+    streams_prefix: str = STREAMS_PREFIX,
+) -> BacktestEngine:
+    """EMA 策略便利包裝(見 ``build_streaming_engine_with_strategy``)。"""
+    return build_streaming_engine_with_strategy(
+        instrument,
+        bars,
+        EMACross(config=config),
+        trader_id=trader_id,
+        starting_usdt=starting_usdt,
+        leverage=leverage,
+        random_seed=random_seed,
+        redis_host=redis_host,
+        redis_port=redis_port,
+        streams_prefix=streams_prefix,
+    )

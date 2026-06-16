@@ -17,6 +17,26 @@ from nautilus_trader.model.objects import Price, Quantity
 BTCUSDT_PERP_BINANCE_ID = InstrumentId(Symbol("BTCUSDT-PERP"), Venue("BINANCE"))
 
 
+# 卡 #20 (W1):symbol 字串 -> instrument factory(command worker 用)。
+# W1 先支援 BTCUSDT-PERP.BINANCE;新增標的在此註冊(預留擴充)。
+_INSTRUMENT_FACTORIES = {
+    str(BTCUSDT_PERP_BINANCE_ID): lambda: btcusdt_perp_binance(),
+}
+
+
+def instrument_for(symbol: str) -> CryptoPerpetual:
+    """由 symbol 字串(InstrumentId 形式)解析 instrument 定義。
+
+    未支援的 symbol 拋 ``ValueError``(應用層約束)。W1 僅 BTCUSDT-PERP.BINANCE。
+    """
+    factory = _INSTRUMENT_FACTORIES.get(symbol)
+    if factory is None:
+        raise ValueError(
+            f"unsupported symbol {symbol!r}; 支援:{sorted(_INSTRUMENT_FACTORIES)}"
+        )
+    return factory()
+
+
 def btcusdt_perp_binance(ts_init: int = 0) -> CryptoPerpetual:
     """建構 Binance USD-M BTCUSDT 永續合約 instrument 定義。"""
     return CryptoPerpetual(
