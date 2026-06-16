@@ -176,3 +176,53 @@ def test_node_controller_stop_strategy_only_stops_target():
 def test_node_controller_stop_unknown_strategy_is_noop():
     node = NodeController(strategies={})
     node.stop_strategy("ghost")  # 不存在 → 安全略過,不拋。
+
+
+# --- 常駐 loop 路由:控制命令 → controller(不需 backtest 路徑)--------------
+
+import asyncio
+
+from jimq_engine.control.worker import run_command_worker
+
+
+class _OneShotRedis:
+    """yield 一筆指定 entry 後即停止 loop 的最小 async Redis 替身。"""
+
+    def __init__(self, entry, stop_event) -> None:
+        self._entry = entry
+        self._stop = stop_event
+        self.acked: list = []
+
+    async def xgroup_create(self, *a, **k):
+        return True
+
+    async def xreadgroup(self, group, consumer, streams, count=1, block=0):  # noqa: ANN001
+        self._stop.set()  # 派送完這批就請 loop 收工(避免無限阻塞)。
+        return [(b"jimq:commands", [self._entry])]
+
+    async def xack(self, key, group, entry_id):  # noqa: ANN001
+        self.acked.append(entry_id)
+
+
+async def test_loop_routes_kill_command_to_controller():
+    """常駐 loop 收到 KILL entry → 派送到 controller.kill();不碰 backtest 路徑。"""
+    stop = asyncio.Event()
+    entry = _entry(
+        COMMAND_TYPE_KILL,
+        _control_json(command_type=COMMAND_TYPE_KILL, correlation_id="loop-kill"),
+    )
+    aredis = _OneShotRedis(entry, stop)
+    ctrl = _FakeController()
+
+    await run_command_worker(
+        aredis,
+        sync_redis=None,
+        writer=None,
+        catalog=object(),  # 控制路徑不觸 catalog;給佔位避免開預設 catalog。
+        controller=ctrl,
+        stop_event=stop,
+        block_ms=1,
+    )
+
+    assert ctrl.calls == [("kill",)]
+    assert aredis.acked == [b"0-1"]
