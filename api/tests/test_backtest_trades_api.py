@@ -40,6 +40,15 @@ def test_trades_endpoint_returns_only_that_runs_trades():
     run_b = 910_000_002
 
     async def _seed():
+        import sqlalchemy as sa
+        from app.core.db.database import async_engine
+
+        # idempotent:先清掉這兩個 run 的殘留(避免前次失敗留資料)。
+        async with async_engine.begin() as conn:
+            await conn.execute(
+                sa.text("DELETE FROM backtest_trade WHERE run_id = ANY(:r)"),
+                {"r": [run_a, run_b]},
+            )
         async with local_session() as db:
             for run_id, n, side in ((run_a, 2, TradeSide.LONG), (run_b, 1, TradeSide.SHORT)):
                 for i in range(n):
@@ -57,16 +66,35 @@ def test_trades_endpoint_returns_only_that_runs_trades():
                             closed_at=datetime(2024, 1, 1, i + 1, tzinfo=UTC),
                         ),
                     )
+        # Dispose the shared async engine so its asyncpg connections aren't
+        # reused across event loops by the later TestClient request (the
+        # TestClient runs its own loop). Same isolation guard as
+        # test_backtest_run.py.
+        await async_engine.dispose()
 
     async def _cleanup():
         import sqlalchemy as sa
-        from app.core.db.database import async_engine
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from app.core.config import settings
 
-        async with async_engine.begin() as conn:
+        # 用獨立 engine(避免 share async_engine 的連線綁在 TestClient 的 loop)。
+        url = (
+            f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
+            f"@{settings.POSTGRES_SERVER}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+        )
+        eng = create_async_engine(url)
+        async with eng.begin() as conn:
             await conn.execute(
                 sa.text("DELETE FROM backtest_trade WHERE run_id = ANY(:r)"),
                 {"r": [run_a, run_b]},
             )
+        await eng.dispose()
+
+    async def _dispose_shared():
+        # TestClient 在自己的 loop 起了 async_engine 的連線;dispose 使後續測試
+        # (亦用 shared engine + TestClient)不致跨 loop 重用連線(測試隔離)。
+        from app.core.db.database import async_engine
+
         await async_engine.dispose()
 
     anyio.run(_seed)
@@ -84,3 +112,4 @@ def test_trades_endpoint_returns_only_that_runs_trades():
         assert times == sorted(times)
     finally:
         anyio.run(_cleanup)
+        anyio.run(_dispose_shared)
