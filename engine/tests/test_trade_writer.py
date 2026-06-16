@@ -18,7 +18,7 @@ from decimal import Decimal
 
 import pytest
 
-from jimq_engine.control.trade_writer import extract_trades
+from jimq_engine.control.trade_writer import extract_trades, round_trips_from_fills
 
 _NS_PER_SEC = 1_000_000_000
 
@@ -143,6 +143,64 @@ def test_extract_handles_no_bracket_orders_as_null_sl_tp():
     assert trades[0]["side"] == "SHORT"
     assert trades[0]["sl"] is None
     assert trades[0]["tp"] is None
+
+
+# --- 從 fill 流重建 round-trip(NETTING:單一 position 永不歸零的情況)----------
+
+
+class _FakeFill:
+    """模擬 Nautilus OrderFilled:last_px / last_qty / is_buy / ts_event。"""
+
+    def __init__(self, *, is_buy, last_px, last_qty, ts_event):
+        self.is_buy = is_buy
+        self.is_sell = not is_buy
+        self.last_px = last_px
+        self.last_qty = last_qty
+        self.ts_event = ts_event
+
+
+def test_round_trips_long_then_flat():
+    # buy 1 @100(開多)→ sell 1 @110(平多歸零)= 一筆 LONG round-trip,pnl=+10。
+    fills = [
+        _FakeFill(is_buy=True, last_px=100.0, last_qty=1.0, ts_event=_ns(datetime(2024, 1, 1, 0, 0, tzinfo=UTC))),
+        _FakeFill(is_buy=False, last_px=110.0, last_qty=1.0, ts_event=_ns(datetime(2024, 1, 1, 1, 0, tzinfo=UTC))),
+    ]
+    trips = round_trips_from_fills(fills, instrument_id="BTCUSDT-PERP.BINANCE", run_id=9)
+    assert len(trips) == 1
+    t = trips[0]
+    assert t["side"] == "LONG"
+    assert Decimal(str(t["entry_price"])) == Decimal("100.0")
+    assert Decimal(str(t["exit_price"])) == Decimal("110.0")
+    assert Decimal(str(t["quantity"])) == Decimal("1.0")
+    assert Decimal(str(t["pnl"])) == Decimal("10.0")
+    assert t["run_id"] == 9
+
+
+def test_round_trips_flip_long_to_short_splits_into_two():
+    # buy 1 @100(開多)→ sell 2 @120(平多 +20 並反手做空 1)→ buy 1 @115(平空 +5)。
+    fills = [
+        _FakeFill(is_buy=True, last_px=100.0, last_qty=1.0, ts_event=1),
+        _FakeFill(is_buy=False, last_px=120.0, last_qty=2.0, ts_event=2),
+        _FakeFill(is_buy=True, last_px=115.0, last_qty=1.0, ts_event=3),
+    ]
+    trips = round_trips_from_fills(fills, instrument_id="X", run_id=1)
+    assert len(trips) == 2
+    long_t, short_t = trips
+    assert long_t["side"] == "LONG"
+    assert Decimal(str(long_t["pnl"])) == Decimal("20.0")  # (120-100)*1
+    assert short_t["side"] == "SHORT"
+    assert Decimal(str(short_t["quantity"])) == Decimal("1.0")
+    assert Decimal(str(short_t["pnl"])) == Decimal("5.0")  # (120-115)*1 short
+
+
+def test_round_trips_open_tail_position_is_closed_at_last_fill():
+    # buy 1 @100,沒有平倉 fill:回測結束仍持倉。仍輸出一筆(exit=最後 fill 價,
+    # 標記未實現以最後價估;pnl=0,確保權益曲線不漏掉進場 marker)。
+    fills = [_FakeFill(is_buy=True, last_px=100.0, last_qty=1.0, ts_event=5)]
+    trips = round_trips_from_fills(fills, instrument_id="X", run_id=1)
+    assert len(trips) == 1
+    assert trips[0]["side"] == "LONG"
+    assert Decimal(str(trips[0]["quantity"])) == Decimal("1.0")
 
 
 # --- DB round-trip:TradeWriter 寫入後可讀回(opt-in)--------------------------
