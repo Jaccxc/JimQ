@@ -9,3 +9,11 @@ import { twMerge } from 'tailwind-merge'
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
 }
+
+/** 數字方向:正→up、負→down、0/NaN→flat。StatPill 等數字色塊據此上色。 */
+export type StatDirection = 'up' | 'down' | 'flat'
+
+export function statSign(value: number): StatDirection {
+  if (!Number.isFinite(value) || value === 0) return 'flat'
+  return value > 0 ? 'up' : 'down'
+}
