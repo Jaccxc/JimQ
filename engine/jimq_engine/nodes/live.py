@@ -44,7 +44,7 @@ from nautilus_trader.config import (
     TradingNodeConfig,
 )
 from nautilus_trader.model.data import BarType
-from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.model.identifiers import InstrumentId, Venue
 
 from jimq_engine.catalog.instruments import BTCUSDT_PERP_BINANCE_ID
 from jimq_engine.streaming.redis_bus import streaming_message_bus_config
@@ -73,6 +73,35 @@ class BarSubscriberConfig(ActorConfig, frozen=True):
     bar_type: str
 
 
+class TradeTickSubscriberConfig(ActorConfig, frozen=True):
+    """TradeTickSubscriberActor 設定:要訂閱 TradeTick 的 instrument_id 字串。"""
+
+    trade_tick_instrument_id: str
+
+
+class TradeTickSubscriberActor(Actor):
+    """卡 B(Live 次秒 tick)— data-only actor:訂閱 BTCUSDT-PERP **逐筆成交** TradeTick。
+
+    ⛔ 最高優先鐵律:**tick 純視覺,絕不進策略**。本 actor 不持任何交易邏輯、
+    不下單、不重算 EMA —— 它只是讓 live data client 把 TradeTick 推進 MessageBus
+    (→ Redis Streams ``data.trades.{venue}.{symbol}`` topic → consumer 'trades'
+    channel → 前端),供前端把每筆成交價聚合到「形成中、尚未收線」那根 1m K 線的
+    視覺更新。策略決策仍只在 1m bar 收線時跑一次(EMACross.on_bar 不變),
+    保住回測/live parity。
+    """
+
+    def __init__(self, config: TradeTickSubscriberConfig) -> None:
+        super().__init__(config)
+        self._instrument_id = InstrumentId.from_str(config.trade_tick_instrument_id)
+
+    def on_start(self) -> None:
+        self.subscribe_trade_ticks(self._instrument_id)
+
+    def on_trade_tick(self, tick) -> None:  # noqa: ANN001 — Nautilus callback
+        # ⛔ 純記錄,不進策略;事件由 MessageBus 外部串流落地 Redis(僅供視覺)。
+        self.log.debug(f"live trade tick: {tick!r}")
+
+
 class BarSubscriberActor(Actor):
     """data-only actor:啟動時訂閱指定 bar_type 的即時 bar(不下單)。
 
@@ -91,6 +120,21 @@ class BarSubscriberActor(Actor):
     def on_bar(self, bar) -> None:  # noqa: ANN001 — Nautilus callback
         # 純記錄;事件由 MessageBus 外部串流落地 Redis(下游消費)。
         self.log.info(f"live bar: {bar!r}")
+
+
+def _trade_tick_actor_config(
+    instrument_id: str = str(BTCUSDT_PERP_BINANCE_ID),
+) -> ImportableActorConfig:
+    """卡 B:訂 BTCUSDT-PERP TradeTick 的 data-only actor 設定(視覺次秒串流)。
+
+    ⛔ 純視覺:逐筆成交經 MessageBus → Redis ``data.trades.`` topic → 前端;
+    不進策略決策路徑。data 與 trade 節點共用此 actor。
+    """
+    return ImportableActorConfig(
+        actor_path=f"{TradeTickSubscriberActor.__module__}:{TradeTickSubscriberActor.__qualname__}",
+        config_path=f"{TradeTickSubscriberConfig.__module__}:{TradeTickSubscriberConfig.__qualname__}",
+        config={"trade_tick_instrument_id": instrument_id},
+    )
 
 
 def binance_testnet_data_client_config(
@@ -133,8 +177,10 @@ def build_live_data_node_config(
         trader_id=trader_id,
         environment=Environment.LIVE,
         logging=LoggingConfig(log_level="INFO"),
+        # 卡 B:include_trade_ticks=True → bus 放行 TradeTick(只排 QuoteTick),
+        # 逐筆成交序列化進 Redis 供前端視覺聚合(⛔ tick 純視覺,不進策略)。
         message_bus=streaming_message_bus_config(
-            host=redis_host, port=redis_port
+            host=redis_host, port=redis_port, include_trade_ticks=True
         ),
         data_engine=LiveDataEngineConfig(),
         data_clients={
@@ -149,6 +195,8 @@ def build_live_data_node_config(
                 config_path=f"{BarSubscriberConfig.__module__}:{BarSubscriberConfig.__qualname__}",
                 config={"bar_type": bar_type},
             ),
+            # 卡 B:額外訂 TradeTick(視覺次秒串流;不進策略)。
+            _trade_tick_actor_config(),
         ],
     )
 
@@ -333,8 +381,10 @@ def build_live_trade_node_config(
         trader_id=trader_id,
         environment=Environment.LIVE,
         logging=LoggingConfig(log_level="INFO"),
+        # 卡 B:include_trade_ticks=True → bus 放行 TradeTick(視覺次秒串流;
+        # ⛔ 策略仍只訂 1m bar,tick 不進策略決策,保住回測/live parity)。
         message_bus=streaming_message_bus_config(
-            host=redis_host, port=redis_port
+            host=redis_host, port=redis_port, include_trade_ticks=True
         ),
         data_engine=LiveDataEngineConfig(),
         exec_engine=LiveExecEngineConfig(reconciliation=reconciliation),
@@ -345,6 +395,8 @@ def build_live_trade_node_config(
         ),
         data_clients={str(BINANCE): data_cfg},
         exec_clients={str(BINANCE): exec_cfg},
+        # 卡 B:額外掛 TradeTick 視覺訂閱 actor(data-only;⛔ 不進策略)。
+        actors=[_trade_tick_actor_config()],
         strategies=[
             ema_cross_strategy_config(
                 bar_spec=bar_spec,
