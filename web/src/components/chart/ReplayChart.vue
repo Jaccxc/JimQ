@@ -12,11 +12,14 @@ import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { ChartController } from '@/lib/chartController'
 import type { BarDTO } from '@/types/contract'
 import type { MarkerSpec, PriceLineSpec } from '@/lib/tradeMapping'
+import type { EquityPoint } from '@/lib/equityCurve'
 
 const props = defineProps<{
   bars: BarDTO[]
   markers: MarkerSpec[]
   priceLines: PriceLineSpec[]
+  /** PnL/權益曲線(主圖下方獨立副圖);換 run 一起重畫,空則清掉。 */
+  equity?: EquityPoint[]
 }>()
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -30,6 +33,10 @@ function redraw() {
   controller.setMarkers(props.markers)
   controller.clearPriceLines()
   for (const spec of props.priceLines) controller.addPriceLine(spec)
+  // 權益副圖:有資料 → 全量重畫,空 → 清掉(換 run 不殘留前一條曲線)。
+  const equity = props.equity ?? []
+  if (equity.length) controller.setEquityLine(equity)
+  else controller.clearEquityLine()
 }
 
 onMounted(() => {
@@ -38,7 +45,7 @@ onMounted(() => {
   redraw()
   // bars / markers / priceLines 任一變(換 run 或載完成)→ 重畫。
   watch(
-    () => [props.bars, props.markers, props.priceLines],
+    () => [props.bars, props.markers, props.priceLines, props.equity],
     () => redraw(),
   )
 })
