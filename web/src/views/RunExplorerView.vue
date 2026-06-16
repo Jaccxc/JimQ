@@ -184,7 +184,7 @@ onMounted(() => {
 .run-list td {
   text-align: right;
   padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--surface-2);
   color: var(--color-text);
 }
 .run-row {
@@ -192,10 +192,10 @@ onMounted(() => {
   transition: background var(--duration-fast) var(--ease-glass);
 }
 .run-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
 }
 .run-row.selected {
-  background: rgba(10, 132, 255, 0.14);
+  background: var(--accent-tint-strong);
 }
 .empty {
   color: var(--color-text-faint);
@@ -212,6 +212,6 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   border: 1px solid var(--glass-l1-border);
   overflow: hidden;
-  background: rgba(11, 14, 20, 0.4);
+  background: var(--chart-frame-bg);
 }
 </style>

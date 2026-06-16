@@ -245,7 +245,7 @@ onMounted(async () => {
 .count {
   font-size: 11px;
   color: var(--color-text-muted);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-3);
   border: 1px solid var(--glass-l1-border);
   border-radius: var(--radius-xs);
   padding: 1px 7px;
@@ -283,13 +283,13 @@ onMounted(async () => {
 }
 .tbl td {
   padding: calc(var(--spacing) * 1.75) calc(var(--spacing) * 2.5);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--surface-2);
 }
 .tbl tbody tr.data-row {
   transition: background var(--duration-fast) var(--ease-glass);
 }
 .tbl tbody tr.data-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
 }
 .tbl td.strong {
   color: var(--color-text);
@@ -308,8 +308,8 @@ onMounted(async () => {
 .ver-pill {
   font-size: 11px;
   color: var(--color-accent);
-  background: rgba(10, 132, 255, 0.12);
-  border: 1px solid rgba(10, 132, 255, 0.25);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-border);
   border-radius: var(--radius-xs);
   padding: 1px 6px;
   font-variant-numeric: tabular-nums;
@@ -324,15 +324,15 @@ onMounted(async () => {
 }
 .status-pill[data-status='FINISHED'] {
   color: var(--color-up);
-  border-color: rgba(38, 208, 124, 0.3);
+  border-color: var(--up-border);
 }
 .status-pill[data-status='FAILED'] {
   color: var(--color-down);
-  border-color: rgba(255, 92, 92, 0.3);
+  border-color: var(--down-border);
 }
 .status-pill[data-status='RUNNING'] {
   color: var(--color-accent);
-  border-color: rgba(10, 132, 255, 0.3);
+  border-color: var(--accent-border);
 }
 
 /* ---- experiment select ---- */
@@ -341,7 +341,7 @@ onMounted(async () => {
 }
 .exp-select {
   appearance: none;
-  background: rgba(11, 14, 20, 0.5);
+  background: var(--field-bg);
   color: var(--color-text);
   border: 1px solid var(--glass-l1-border);
   border-radius: var(--radius-xs);
@@ -352,7 +352,7 @@ onMounted(async () => {
     box-shadow var(--duration-fast) var(--ease-glass);
 }
 .exp-select:hover {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--surface-hover-border);
 }
 .exp-select:focus {
   outline: none;
@@ -379,7 +379,7 @@ onMounted(async () => {
   padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2.5);
   border-radius: var(--radius-xs);
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-1);
   color: var(--color-text-muted);
   border: 1px solid var(--glass-l1-border);
   white-space: nowrap;
@@ -389,8 +389,8 @@ onMounted(async () => {
 }
 .deploy-btn:hover {
   color: var(--color-accent);
-  border-color: rgba(10, 132, 255, 0.4);
-  background: rgba(10, 132, 255, 0.08);
+  border-color: var(--accent-border);
+  background: var(--accent-tint);
 }
 
 /* ---- job 區塊 ---- */
@@ -412,7 +412,7 @@ onMounted(async () => {
   padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 4);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-2);
   color: var(--color-text);
   border: 1px solid var(--glass-l1-border);
   transition: opacity var(--duration-fast) var(--ease-glass),

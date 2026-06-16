@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 改版 S1b — UI 元件預覽頁(/ui-preview)。
+ * UI 元件預覽 gallery(/ui-preview)。改版 S1b 建,S6 決議保留為內部 gallery。
  * 展示 shadcn-vue 元件(button/card/dialog/select/tabs/tooltip/badge/table/input)
- * + 玻璃 primitives(GlassPanel/GlassToolbar/StatPill),供使用者視覺驗收。
- * 純展示頁,不接 store/API,不影響既有頁面。
+ * + 玻璃 primitives(GlassPanel/GlassToolbar/StatPill),作為後續換皮卡的 living reference。
+ * 純展示頁,不接 store/API,不掛 header nav,不影響既有頁面。
  */
 import { ref } from 'vue'
 import { Button } from '@/components/ui/button'
@@ -233,8 +233,8 @@ const rows = [
 /* 預覽頁底:大面積禁 backdrop-filter,用次層實心 bg + 一點漸層讓玻璃高光可見。 */
 .preview-bg {
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(10, 132, 255, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 0% 110%, rgba(167, 139, 250, 0.1), transparent 60%),
+    radial-gradient(1200px 600px at 80% -10%, var(--ambient-accent), transparent 60%),
+    radial-gradient(900px 500px at 0% 110%, var(--ambient-data-line), transparent 60%),
     var(--color-bg);
 }
 </style>

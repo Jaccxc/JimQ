@@ -103,9 +103,9 @@ const nodeStatus = computed(() => (control.store.killed ? 'KILLED' : 'RUNNING'))
 .stop {
   background: var(--color-down-pill);
   color: var(--color-down);
-  border-color: rgba(255, 92, 92, 0.32);
+  border-color: var(--color-down-pill-border);
 }
-.stop:hover:not(:disabled) { background: rgba(255, 92, 92, 0.24); }
+.stop:hover:not(:disabled) { background: var(--color-down-pill-hover); }
 .status {
   font-size: 11px;
   color: var(--color-text-faint);

@@ -19,7 +19,8 @@ export const router = createRouter({
       name: 'research',
       component: () => import('@/views/ResearchView.vue'),
     },
-    // 改版 S1b:設計系統元件預覽(供視覺驗收;不影響既有頁面)。
+    // 設計系統元件預覽 gallery(改版 S1b 建,S6 決議保留為內部 gallery):
+    // lazy-load、不掛 header nav、不接 store/API,作為後續換皮卡的 living reference。
     {
       path: '/ui-preview',
       name: 'ui-preview',

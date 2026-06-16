@@ -46,6 +46,46 @@
   --color-down: #ff5c5c;
   --color-up-pill: rgba(38, 208, 124, 0.16);
   --color-down-pill: rgba(255, 92, 92, 0.16);
+  --color-down-pill-hover: rgba(255, 92, 92, 0.24);
+  --color-down-pill-border: rgba(255, 92, 92, 0.32);
+
+  /* ---- 警示(amber):連線中/出場 marker;非漲跌語意,獨立 token ---- */
+  --color-warn: #f0b90b;
+
+  /* ---- 非蠟燭資料圖線色(權益/PnL 曲線等;紫,K 線內部不適用) ---- */
+  --color-data-line: #a78bfa;
+
+  /* ---- 互動表面層(玻璃上的白色微浮層,集中管理避免散落 magic rgba) ---- */
+  --surface-1: rgba(255, 255, 255, 0.04); /* row hover / 靜態微浮層 */
+  --surface-2: rgba(255, 255, 255, 0.05); /* 分隔線 / 弱按鈕底 */
+  --surface-3: rgba(255, 255, 255, 0.06); /* pill / hover 強一階 */
+  --surface-hover-border: rgba(255, 255, 255, 0.2); /* hover 邊框 */
+  /* 表單欄位底(深於面板,與玻璃面板分層) */
+  --field-bg: rgba(11, 14, 20, 0.5);
+  /* K 線外圈框底(略透,讓底層 bg 透出) */
+  --chart-frame-bg: rgba(11, 14, 20, 0.4);
+
+  /* ---- accent 衍生(tint / 邊框 / 發光),集中管理 ---- */
+  --accent-tint: rgba(10, 132, 255, 0.12);
+  --accent-tint-strong: rgba(10, 132, 255, 0.14);
+  --accent-border: rgba(10, 132, 255, 0.3);
+  --accent-glow: 0 2px 8px rgba(10, 132, 255, 0.3);
+
+  /* ---- 狀態邊框 tint(漲/跌/警示),供 status-pill 等 ---- */
+  --up-border: rgba(38, 208, 124, 0.3);
+  --down-border: rgba(255, 92, 92, 0.3);
+  /* 狀態色發光(實心點外圈柔光) */
+  --up-glow: 0 0 6px rgba(38, 208, 124, 0.5);
+  --down-glow: 0 0 6px rgba(255, 92, 92, 0.5);
+  --warn-glow: 0 0 6px rgba(240, 185, 11, 0.5);
+
+  /* ---- 圖表疊圖線色(EMA fast/slow legend 與 chartController series 對齊) ---- */
+  --ema-fast: #42a5f5;
+  --ema-slow: #ffa726;
+
+  /* ---- 環境光暈漸層(大面積背景:禁 backdrop-filter,用 radial tint 讓玻璃高光浮現) ---- */
+  --ambient-accent: rgba(10, 132, 255, 0.12);
+  --ambient-data-line: rgba(167, 139, 250, 0.1);
 
   /* ---- 字體 ---- */
   --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;

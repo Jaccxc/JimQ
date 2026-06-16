@@ -120,7 +120,7 @@ label {
   font-size: 10px; color: var(--color-text-muted);
 }
 input, select {
-  background: rgba(11, 14, 20, 0.5);
+  background: var(--field-bg);
   color: var(--color-text);
   border: 1px solid var(--glass-l1-border);
   border-radius: var(--radius-xs);
