@@ -124,10 +124,25 @@ ACCOUNT_STATE_PAYLOAD = {
 }
 
 
+# 卡 B(Live 次秒 tick)— Binance TradeTick 串流 payload(取自 nodes/live.py
+# TradeTickSubscriberActor 訂閱、bus 序列化)。topic = data.trades.{venue}.{symbol}。
+TRADE_TICK_PAYLOAD = {
+    "type": "TradeTick",
+    "instrument_id": "BTCUSDT-PERP.BINANCE",
+    "price": "40001.5",
+    "size": "0.010",
+    "aggressor_side": "BUYER",
+    "trade_id": "T-123",
+    "ts_event": "1700000005000000000",
+    "ts_init": "1700000005000000000",
+}
+
+
 @pytest.mark.parametrize(
     ("topic", "payload", "expected_channel"),
     [
         ("data.bars.BTCUSDT-PERP.BINANCE-1-MINUTE-LAST-EXTERNAL", BAR_PAYLOAD, "bars"),
+        ("data.trades.BINANCE.BTCUSDT-PERP", TRADE_TICK_PAYLOAD, "trades"),
         ("events.order.EMACross-000", ORDER_INIT_PAYLOAD, "orders"),
         ("events.fills.BTCUSDT-PERP.BINANCE", ORDER_FILLED_PAYLOAD, "fills"),
         ("events.position.EMACross-000", POSITION_OPENED_PAYLOAD, "positions"),
@@ -192,3 +207,20 @@ def test_bar_data_carries_normalized_dto_fields():
     # 沿用 BarDTO 風格:time(epoch 秒)+ OHLCV 字串保留精度。
     assert data["time"] == 1700000000
     assert data["close"] == "40000.0"
+
+
+def test_trade_tick_normalized_to_trades_channel_with_time_and_price():
+    """卡 B:TradeTick → trades channel,data 帶前端視覺聚合用的 time(秒)+ price。
+
+    前端用每筆成交的 time(epoch 秒,對齊 LWC UTCTimestamp)+ price 聚合到
+    形成中那根 1m K 線(更新 high/low/close)。price 維持字串保留交易所精度。
+    """
+    norm = StreamNormalizer()
+    env = norm.normalize_entry(
+        _entry("data.trades.BINANCE.BTCUSDT-PERP", TRADE_TICK_PAYLOAD)
+    )
+    assert env is not None
+    assert env["channel"] == "trades"
+    data = env["data"]
+    assert data["time"] == 1700000005  # ts_init 奈秒 → epoch 秒
+    assert data["price"] == "40001.5"  # 字串保留精度
