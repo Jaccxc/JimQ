@@ -1,0 +1,11 @@
+/** 改版 S1b — ui 元件 barrel(shadcn-vue 整包 + 玻璃 primitives)。 */
+export * from './button'
+export * from './badge'
+export * from './input'
+export * from './card'
+export * from './table'
+export * from './tabs'
+export * from './tooltip'
+export * from './dialog'
+export * from './select'
+export * from './glass'
