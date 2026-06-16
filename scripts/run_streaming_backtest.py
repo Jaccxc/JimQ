@@ -33,13 +33,13 @@ from jimq_engine.catalog.instruments import (
 )
 from jimq_engine.streaming.redis_bus import build_streaming_engine, stream_key_for
 from jimq_engine.strategies.ema_cross import EMACrossConfig
-from jimq_core.constants import REDIS_BUS_DB
+from jimq_core.constants import BACKTEST_LATEST_STREAM_KEY, REDIS_BUS_DB
 
 _BASE_MS = 1_700_000_000_000
 
-# engine 把實際 stream key 寫到這個已知 Redis key,供 API 在 @latest 模式解析
-# (對齊 api/src/app/ws/app_factory.py 的 LATEST_STREAM_KEY)。
-LATEST_STREAM_KEY = "jimq:latest_stream_key"
+# 卡 A:backtest 資料源把實際 stream key 寫到 **backtest scope** latest-key,
+# api 的 backtest scope supervisor 才 watch 它(不污染 Live)。
+LATEST_STREAM_KEY = BACKTEST_LATEST_STREAM_KEY
 
 
 def _redis_host_port() -> tuple[str, int]:

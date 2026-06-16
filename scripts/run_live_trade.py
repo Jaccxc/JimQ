@@ -30,7 +30,7 @@ import time
 import redis as redis_sync
 from dotenv import load_dotenv
 
-from jimq_core.constants import REDIS_BUS_DB
+from jimq_core.constants import LIVE_LATEST_STREAM_KEY, REDIS_BUS_DB
 
 from nautilus_trader.adapters.binance import (
     BinanceLiveDataClientFactory,
@@ -50,9 +50,9 @@ from jimq_engine.nodes.live import (
     credentials_from_env,
 )
 
-# engine 把實際事件 stream key 寫到這個已知 Redis key,供 API 在 @latest 模式解析
-# (對齊 api/src/app/ws/app_factory.py 的 LATEST_STREAM_KEY)。
-LATEST_STREAM_KEY = "jimq:latest_stream_key"
+# 卡 A:live/paper 交易資料源把實際 stream key 寫到 **live scope** latest-key,
+# api 的 live scope supervisor 才 watch 它(與 backtest 隔離)。
+LATEST_STREAM_KEY = LIVE_LATEST_STREAM_KEY
 
 
 def _redis_host_port() -> tuple[str, int]:

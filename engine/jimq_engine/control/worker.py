@@ -30,6 +30,7 @@ except Exception:  # noqa: BLE001 - pragma: no cover
     RedisTimeoutError = TimeoutError  # type: ignore[assignment,misc]
 
 from jimq_core.constants import (
+    BACKTEST_LATEST_STREAM_KEY,
     COMMAND_CONSUMER_GROUP,
     COMMAND_STREAM_KEY,
     COMMAND_TYPE_KILL,
@@ -52,9 +53,10 @@ from jimq_engine.streaming.redis_bus import (
 
 logger = logging.getLogger(__name__)
 
-# engine 把實際事件 stream key 寫到此已知 key(供 API @latest 解析;對齊
-# api/src/app/ws/app_factory.py 與 scripts/run_streaming_backtest.py)。
-LATEST_STREAM_KEY = "jimq:latest_stream_key"
+# 卡 A:web 觸發的 backtest 事件 stream key 寫到 **backtest scope** latest-key,
+# api 的 backtest scope supervisor 才 watch 它(不污染 Live;對齊
+# scripts/run_streaming_backtest.py 與 jimq_core.SCOPE_LATEST_KEY)。
+LATEST_STREAM_KEY = BACKTEST_LATEST_STREAM_KEY
 
 _NS_PER_SEC = 1_000_000_000
 
