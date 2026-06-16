@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from jimq_core.constants import COMMAND_TYPE_RUN_BACKTEST
+
 if TYPE_CHECKING:  # pragma: no cover - 僅供型別檢查,執行期不匯入 nautilus
     from nautilus_trader.model.data import Bar
 
@@ -122,3 +124,35 @@ class BacktestRunSummary(BaseModel):
     final_balance: Decimal | None = None
 
     run_group: str | None = None
+
+
+class RunBacktestCommand(BaseModel):
+    """run_backtest 命令信封(卡 #20 W1;命令平面共用契約)。
+
+    api(發布端)把使用者的 launcher 表單轉成此信封,序列化(JSON)XADD 到
+    Redis command stream(DB0 的 ``COMMAND_STREAM_KEY``);engine 常駐 command
+    worker 反序列化後依 ``strategy`` 名建策略、跑啟用 Redis Streams 的 backtest、
+    回寫 ``backtest_run`` 狀態。api 不 import engine —— 兩端僅經此信封解耦。
+
+    - ``command_type``:命令種類契約字面值,預設 ``RUN_BACKTEST``(列舉欄位慣例)。
+    - ``correlation_id``:端到端追蹤 id(請求 → 命令 → run → 事件流),供審計。
+    - ``run_id``:api 預建的 ``backtest_run`` 列 id(worker 據此回寫狀態流轉)。
+    - ``symbol`` / ``timeframe``:標的與週期(如 BTCUSDT-PERP.BINANCE / 1m)。
+    - ``strategy``:策略名(worker 用 strategy factory by name 解析;ema_cross 先行)。
+    - ``params``:本質非結構化的策略參數 payload(如 fast/slow period)。
+    - ``start`` / ``end``:backtest 區間(timezone-aware datetime)。
+
+    純 Pydantic(無 nautilus / redis / sqlalchemy 依賴),api 與 engine 共用。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    command_type: str = COMMAND_TYPE_RUN_BACKTEST
+    correlation_id: str
+    run_id: int
+    symbol: str
+    timeframe: str
+    strategy: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    start: datetime
+    end: datetime
