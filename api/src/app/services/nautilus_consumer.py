@@ -13,7 +13,8 @@
 - **stream 格式**沿用 #5:單一聚合 stream key,每筆 entry 兩個 field
   ``topic``(str)與 ``payload``(msgpack dict,帶 ``type``)。
 - **channel 映射**(topic 前綴 → channel):
-  ``data.bars.`` → bars、``events.order.`` → orders、``events.fills.`` → fills、
+  ``data.bars.`` → bars、``data.trades.`` → trades(卡 B TradeTick 視覺串流)、
+  ``events.order.`` → orders、``events.fills.`` → fills、
   ``events.position.`` → positions、``events.account.`` → pnl。其餘略過。
 - **seq 來源**:consumer 端單調整數,從 1 起,每發出一個信封 +1。被略過的
   entry 不消耗 seq(gapless 給 last_seq 補洞用)。
@@ -28,13 +29,15 @@ from typing import Any, Mapping, Sequence
 
 import msgspec
 
-from jimq_core.schemas import bar_event_data
+from jimq_core.schemas import bar_event_data, trade_event_data
 
 logger = logging.getLogger(__name__)
 
 # topic 前綴 → 對外 channel 名稱。順序不重要(前綴互斥)。
+# 卡 B:``data.trades.`` → trades(TradeTick 逐筆成交視覺串流;⛔ 純視覺,不進策略)。
 _TOPIC_PREFIX_TO_CHANNEL: tuple[tuple[str, str], ...] = (
     ("data.bars.", "bars"),
+    ("data.trades.", "trades"),
     ("events.order.", "orders"),
     ("events.fills.", "fills"),
     ("events.position.", "positions"),
@@ -63,6 +66,9 @@ def _normalize_data(channel: str, payload: Mapping[str, Any]) -> dict[str, Any]:
     data = dict(payload)
     if channel == "bars":
         data.update(bar_event_data(payload))
+    elif channel == "trades":
+        # 卡 B:TradeTick → 補 time(epoch 秒)供前端視覺聚合;price 維持字串保留精度。
+        data.update(trade_event_data(payload))
     return data
 
 

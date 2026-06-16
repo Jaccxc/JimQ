@@ -72,6 +72,32 @@ async def test_snapshot_keeps_recent_bars_and_latest_pnl():
 
 
 @pytest.mark.asyncio
+async def test_subscriber_receives_trades_channel():
+    """卡 B:trades channel 的訂閱者收到 publish 的逐筆成交信封(多工不漏)。"""
+    hub = Hub()
+    sub = hub.subscribe({"trades"})
+    await hub.publish(_env("trades", 1, time=100, price="40001.5"))
+    got = await asyncio.wait_for(sub.queue.get(), 1)
+    assert got["channel"] == "trades"
+    assert got["data"]["price"] == "40001.5"
+
+
+@pytest.mark.asyncio
+async def test_snapshot_keeps_recent_trades_ring():
+    """卡 B:trades 採小 ring 快照 —— 新連線取得近期幾筆成交(序保留)。
+
+    讓 Live 圖一連上就反映形成中那根的最新跳動,不必空等下一筆 tick。
+    """
+    hub = Hub(trades_history=3)
+    for i in range(5):
+        await hub.publish(_env("trades", i + 1, time=i, price=str(i)))
+    snap = hub.snapshot({"trades"})
+    trades = [e for e in snap if e["channel"] == "trades"]
+    # 只留最近 3 筆(序保留)。
+    assert [e["data"]["price"] for e in trades] == ["2", "3", "4"]
+
+
+@pytest.mark.asyncio
 async def test_bounded_queue_drop_oldest_on_overflow():
     """有界佇列滿時丟最舊(bars 類:drop-oldest)。"""
     hub = Hub()

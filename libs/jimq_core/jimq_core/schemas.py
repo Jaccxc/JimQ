@@ -34,7 +34,9 @@ if TYPE_CHECKING:  # pragma: no cover - 僅供型別檢查,執行期不匯入 na
 _NS_PER_SEC = 1_000_000_000
 
 # WS 多工 channel 名稱(共用契約)。consumer/hub/ws gateway 與前端共用。
-Channel = Literal["bars", "orders", "fills", "positions", "pnl"]
+# 卡 B(Live 次秒 tick):新增 ``trades`` —— TradeTick 逐筆成交視覺串流,前端
+# 聚合到形成中那根 1m K 線(⛔ 純視覺,不進策略;bars 仍是策略 + 權威蠟燭)。
+Channel = Literal["bars", "trades", "orders", "fills", "positions", "pnl"]
 
 
 class BarDTO(BaseModel):
@@ -75,6 +77,20 @@ def bar_event_data(payload: Mapping[str, Any]) -> dict[str, Any]:
     串流 payload 帶字串 OHLCV 與字串 ``ts_init``(epoch 奈秒);此函式回傳要
     併入 WS ``data`` 的補強欄位:``ts``(int 奈秒)與 ``time``(int epoch 秒,
     直接餵 Lightweight Charts ``UTCTimestamp``)。OHLCV 維持字串保留精度。
+    """
+    ts = int(payload["ts_init"])
+    return {"ts": ts, "time": ts // _NS_PER_SEC}
+
+
+def trade_event_data(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """卡 B:把 Nautilus ``TradeTick`` 串流 payload 補上前端視覺聚合用欄位。
+
+    前端用每筆成交的 ``time``(epoch 秒,對齊 Lightweight Charts ``UTCTimestamp``)
+    + ``price`` 聚合到形成中那根 1m K 線的視覺更新(更新 high/low/close)。
+    回傳要併入 WS ``data`` 的補強欄位:``ts``(int 奈秒)與 ``time``(int epoch 秒)。
+    ``price`` 維持原 payload 的字串保留交易所精度(前端自行 parseFloat)。
+
+    ⛔ tick 純視覺串流;它能進信封不代表進策略 —— 策略只看正式收線 1m bar。
     """
     ts = int(payload["ts_init"])
     return {"ts": ts, "time": ts // _NS_PER_SEC}

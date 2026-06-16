@@ -56,6 +56,7 @@ def streaming_message_bus_config(
     host: str = "localhost",
     port: int = 6379,
     streams_prefix: str = STREAMS_PREFIX,
+    include_trade_ticks: bool = False,
 ) -> MessageBusConfig:
     """可重用的 Redis Streams MessageBus 設定(backtest + live 共用)。
 
@@ -64,9 +65,18 @@ def streaming_message_bus_config(
     - ``encoding='msgpack'``:下游 consumer 用 msgpack 反序列化。
     - ``stream_per_topic=False``:單 key 聚合,外部 ``XRANGE`` 取整串。
     - key 結構 ``trader:{trader_id}:{instance_id}:{streams_prefix}``。
-    - ``types_filter``:排除 QuoteTick/TradeTick 等高頻型別。
+    - ``types_filter``:排除高頻型別。
+      * 預設(``include_trade_ticks=False``;**backtest 路徑**):同排
+        QuoteTick + TradeTick → backtest scope 無 tick 噪音(權威蠟燭 = 1m bar)。
+      * ``include_trade_ticks=True``(**live 路徑**,卡 B 次秒 tick):放行
+        TradeTick(只排 QuoteTick 控流量)→ 逐筆成交序列化進 Redis 供前端
+        **視覺**聚合到形成中的那根 K 線。⛔ TradeTick 純視覺,絕不進策略決策:
+        策略訂閱維持只 1m bar(見 nodes/live.py),tick 不觸發任何下單/訊號。
     """
     assert REDIS_BUS_DB == 0, "Nautilus Redis backend 預設 DB0;REDIS_BUS_DB 須為 0"
+    excluded: tuple[type, ...] = (
+        (QuoteTick,) if include_trade_ticks else HIGH_FREQUENCY_TYPES
+    )
     return MessageBusConfig(
         database=DatabaseConfig(type="redis", host=host, port=port),  # 本機 DB0
 
@@ -76,7 +86,7 @@ def streaming_message_bus_config(
         use_trader_id=True,
         use_instance_id=True,
         streams_prefix=streams_prefix,
-        types_filter=list(HIGH_FREQUENCY_TYPES),
+        types_filter=list(excluded),
     )
 
 

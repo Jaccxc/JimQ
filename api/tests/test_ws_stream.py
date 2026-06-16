@@ -90,6 +90,26 @@ def test_backfill_on_reconnect_with_last_seq():
             assert [m["seq"] for m in backfilled] == [4, 5]
 
 
+def test_trades_channel_delta_streamed():
+    """卡 B:訂 trades → 收到逐筆成交 delta(視覺次秒串流端到端)。
+
+    bars 與 trades 是兩條獨立 channel:只訂 trades 的 client 收 trades,不收 bars。
+    """
+    hub = Hub()
+    app = _make_app(hub)
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/stream?channels=trades") as ws:
+            _drain_until_live(ws)
+            client.portal.call(hub.publish, _env("bars", 1, close="x"))
+            client.portal.call(
+                hub.publish, _env("trades", 2, time=1700000005, price="40001.5")
+            )
+            m = ws.receive_json()
+            assert m["channel"] == "trades"
+            assert m["data"]["price"] == "40001.5"
+            assert m["data"]["time"] == 1700000005
+
+
 def test_heartbeat_sent_when_idle():
     """閒置時收到 heartbeat 控制訊息。"""
     hub = Hub()
