@@ -20,9 +20,12 @@ import logging
 from typing import Any, Awaitable, Callable
 
 from .hub import Hub
-from ..ws.app_factory import LATEST_STREAM_KEY
 
 logger = logging.getLogger(__name__)
+
+# engine 寫實際 stream key 的已知 Redis key(與 app_factory.LATEST_STREAM_KEY 同值;
+# 此處本地定義避免 services→ws 反向 import 造成循環)。可由建構子覆寫。
+LATEST_STREAM_KEY = "jimq:latest_stream_key"
 
 # consumer factory:(client, stream_key, publish, *, stop_event) -> coroutine。
 # 預設由呼叫端注入 ``run_consumer``(其簽名相容)。
@@ -55,11 +58,13 @@ class ConsumerSupervisor:
         consumer_factory: ConsumerFactory,
         poll_interval: float = DEFAULT_POLL_INTERVAL,
         sleep: SleepFn | None = None,
+        latest_key: str = LATEST_STREAM_KEY,
     ) -> None:
         self._client = client
         self._hub = hub
         self._consumer_factory = consumer_factory
         self._poll_interval = poll_interval
+        self._latest_key = latest_key
         self._sleep: SleepFn = sleep if sleep is not None else asyncio.sleep
         self._stop = asyncio.Event()
         # 目前正在消費的 key 與其 consumer task / stop event。
@@ -70,7 +75,7 @@ class ConsumerSupervisor:
     async def _read_latest(self) -> str | None:
         """讀 LATEST_STREAM_KEY;讀失敗視為「無 key」(不崩 supervisor)。"""
         try:
-            return _as_str(await self._client.get(LATEST_STREAM_KEY))
+            return _as_str(await self._client.get(self._latest_key))
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
