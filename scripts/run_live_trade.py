@@ -42,6 +42,8 @@ from jimq_engine.nodes.live import (
     BINANCE,
     DEFAULT_BAR_SPEC,
     DEFAULT_FAST_PERIOD,
+    DEFAULT_MAX_NOTIONAL_USDT,
+    DEFAULT_MAX_ORDER_SUBMIT_RATE,
     DEFAULT_PAPER_TRADE_SIZE,
     DEFAULT_SLOW_PERIOD,
     build_live_trade_node_config,
@@ -64,12 +66,25 @@ def _stream_key_for_node(node: TradingNode, streams_prefix: str = "stream") -> s
     return f"trader-{node.trader_id}:{node.instance_id}:{streams_prefix}"
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
+    """組裝 CLI 參數解析器(可單獨測試風控旗標,不啟動節點)。"""
     parser = argparse.ArgumentParser(description="Binance testnet live 交易節點(paper 單)")
     parser.add_argument("--bar-spec", default=DEFAULT_BAR_SPEC)
     parser.add_argument("--trade-size", default=DEFAULT_PAPER_TRADE_SIZE)
     parser.add_argument("--fast", type=int, default=DEFAULT_FAST_PERIOD)
     parser.add_argument("--slow", type=int, default=DEFAULT_SLOW_PERIOD)
+    # 卡 #29 風控旗標(Nautilus 原生 RiskEngine):
+    parser.add_argument(
+        "--max-notional",
+        type=int,
+        default=DEFAULT_MAX_NOTIONAL_USDT,
+        help="每單名目上限(USDT);超限單由 RiskEngine DENIED 不送 venue",
+    )
+    parser.add_argument(
+        "--max-order-submit-rate",
+        default=DEFAULT_MAX_ORDER_SUBMIT_RATE,
+        help="下單頻率上限 throttler(如 10/00:00:01)",
+    )
     parser.add_argument(
         "--duration",
         type=float,
@@ -81,7 +96,11 @@ def main() -> None:
         action="store_true",
         help=f"不把 stream key 寫到 {LATEST_STREAM_KEY}",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    args = build_arg_parser().parse_args()
 
     # 從 .env.afk 載入金鑰(若存在);否則期望已在環境。
     load_dotenv(".env.afk")
@@ -98,6 +117,8 @@ def main() -> None:
         slow_period=args.slow,
         redis_host=redis_host,
         redis_port=redis_port,
+        max_notional=args.max_notional,
+        max_order_submit_rate=args.max_order_submit_rate,
     )
 
     node = TradingNode(config=config)
@@ -113,6 +134,10 @@ def main() -> None:
     print("⛔ TESTNET-ONLY:Binance USDT-M Futures testnet(假錢)live 交易節點啟動")
     print(f"stream key = {key}  REDIS_BUS_DB={REDIS_BUS_DB} host={redis_host}:{redis_port}")
     print(f"strategy=ema_cross fast={args.fast} slow={args.slow} trade_size={args.trade_size}")
+    print(
+        f"risk: max_notional={args.max_notional} USDT "
+        f"max_order_submit_rate={args.max_order_submit_rate}"
+    )
 
     def _on_signal(_signum, _frame):  # noqa: ANN001
         node.stop()

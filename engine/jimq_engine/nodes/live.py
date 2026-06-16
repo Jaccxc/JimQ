@@ -39,6 +39,7 @@ from nautilus_trader.config import (
     InstrumentProviderConfig,
     LiveDataEngineConfig,
     LiveExecEngineConfig,
+    LiveRiskEngineConfig,
     LoggingConfig,
     TradingNodeConfig,
 )
@@ -177,6 +178,33 @@ DEFAULT_PAPER_TRADE_SIZE = "0.001"
 DEFAULT_FAST_PERIOD = 3
 DEFAULT_SLOW_PERIOD = 8
 
+# 卡 #29 (P2-S3) 風控預設(Nautilus 原生 RiskEngine;不自造平行風控)。
+# 名目上限:保守 200 USDT。對應 0.001 BTC(@ ~數萬 USDT)安全範圍 + buffer;
+# 超過此名目的單會被 RiskEngine DENIED(MAX_NOTIONAL_EXCEEDED),不送到 venue。
+DEFAULT_MAX_NOTIONAL_USDT = 200
+# 下單頻率上限(throttler):保守 10 單/秒(Nautilus 預設為 100/秒,過鬆)。
+DEFAULT_MAX_ORDER_SUBMIT_RATE = "10/00:00:01"
+
+
+def build_risk_engine_config(
+    *,
+    max_notional: int = DEFAULT_MAX_NOTIONAL_USDT,
+    max_order_submit_rate: str = DEFAULT_MAX_ORDER_SUBMIT_RATE,
+    instrument_id: str = str(BTCUSDT_PERP_BINANCE_ID),
+) -> LiveRiskEngineConfig:
+    """組裝 Nautilus 原生 **LiveRiskEngineConfig**(名目上限 + 下單頻率上限)。
+
+    - ``max_notional_per_order``:{instrument_id: 上限 USDT};超限單被 RiskEngine
+      DENIED,不送 venue(風控攔截真行為由 backtest 引擎驗證,不需 testnet)。
+    - ``max_order_submit_rate``:throttler 頻率上限字串(如 ``"10/00:00:01"``)。
+    - ⛔ ``bypass=False``:風控不可被繞過(否則上限形同虛設)。
+    """
+    return LiveRiskEngineConfig(
+        bypass=False,
+        max_notional_per_order={instrument_id: max_notional},
+        max_order_submit_rate=max_order_submit_rate,
+    )
+
 
 class MainnetBlockedError(RuntimeError):
     """⛔ 最高優先安全:偵測到非 testnet(mainnet / LIVE / DEMO)交易設定時拋出。"""
@@ -267,6 +295,8 @@ def build_live_trade_node_config(
     environment=None,  # noqa: ANN001 — BinanceEnvironment;預設 TESTNET
     reconciliation: bool = True,
     use_bracket: bool = False,
+    max_notional: int = DEFAULT_MAX_NOTIONAL_USDT,
+    max_order_submit_rate: str = DEFAULT_MAX_ORDER_SUBMIT_RATE,
 ) -> TradingNodeConfig:
     """組裝 **live 交易節點** ``TradingNodeConfig``(Binance testnet;下 paper 單)。
 
@@ -276,6 +306,8 @@ def build_live_trade_node_config(
     - environment = LIVE(走 live engine + adapter)。
     - data client + exec client 皆 BINANCE testnet。
     - LiveExecEngineConfig 開 reconciliation(重啟對帳)。
+    - LiveRiskEngineConfig(卡 #29):名目上限 + 下單頻率上限(Nautilus 原生 RiskEngine;
+      超限單 DENIED 不送 venue)。
     - message_bus = #5 streaming(Redis Streams DB0):訂單/成交/部位/PnL 事件
       落地 Redis → consumer → WS → Live 頁面板顯示真 live 值。
     - ⛔ ``assert_testnet_only`` 硬性阻擋非 testnet(真錢 mainnet)。
@@ -306,6 +338,11 @@ def build_live_trade_node_config(
         ),
         data_engine=LiveDataEngineConfig(),
         exec_engine=LiveExecEngineConfig(reconciliation=reconciliation),
+        # 卡 #29:Nautilus 原生風控(名目上限 + 下單頻率),超限單被 RiskEngine deny。
+        risk_engine=build_risk_engine_config(
+            max_notional=max_notional,
+            max_order_submit_rate=max_order_submit_rate,
+        ),
         data_clients={str(BINANCE): data_cfg},
         exec_clients={str(BINANCE): exec_cfg},
         strategies=[
