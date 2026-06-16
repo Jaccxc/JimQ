@@ -34,9 +34,17 @@ export function tradesToEquityCurve(
   const sorted = [...trades].sort(
     (a, b) => new Date(a.closed_at).getTime() - new Date(b.closed_at).getTime(),
   )
+  // 逐筆累加;同一出場 time(同 minute 內多筆出場)合併成單一點,取該 time 的
+  // 最終累積值。LWC LineSeries.setData 要求 time 嚴格遞增且唯一,否則拋
+  // "data must be asc ordered by time"(實測 168 筆 round-trip 會踩到)。
   let equity = startingEquity
-  return sorted.map((t) => {
+  const points: EquityPoint[] = []
+  for (const t of sorted) {
     equity += t.pnl == null ? 0 : Number(t.pnl)
-    return { time: isoToSec(t.closed_at), value: equity }
-  })
+    const time = isoToSec(t.closed_at)
+    const last = points[points.length - 1]
+    if (last && last.time === time) last.value = equity
+    else points.push({ time, value: equity })
+  }
+  return points
 }

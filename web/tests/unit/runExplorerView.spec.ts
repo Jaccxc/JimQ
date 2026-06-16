@@ -11,12 +11,15 @@ import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const calls = {
+  updateBar: vi.fn(),
   setHistory: vi.fn(),
   setMarkers: vi.fn(),
   clearPriceLines: vi.fn(),
   addPriceLine: vi.fn(),
   setEquityLine: vi.fn(),
   clearEquityLine: vi.fn(),
+  reset: vi.fn(),
+  fit: vi.fn(),
   destroy: vi.fn(),
 }
 vi.mock('@/lib/chartController', () => ({
@@ -94,42 +97,62 @@ function mountView() {
   return w
 }
 
-describe('RunExplorerView 換 run 重畫主圖 + 權益副圖', () => {
-  it('選 run A → 主圖畫 A 的 bars + marker;選 run B → 全量換成 B(舊 marker 不殘留)', async () => {
+/** 選 run 後回放引擎自動起播;按「跳結尾」一次性畫完整供斷言全量切片。 */
+async function selectRunToEnd(w: ReturnType<typeof mountView>, runId: number) {
+  await w.get(`[data-testid="run-row-${runId}"]`).trigger('click')
+  await flushPromises()
+  await w.get('[data-testid="replay-to-end"]').trigger('click')
+  await flushPromises()
+}
+
+describe('RunExplorerView 換 run 回放主圖 + 權益副圖', () => {
+  it('選 run A → 回放 A 的 bars + marker;選 run B → 全量換成 B(舊 marker 不殘留)', async () => {
     const w = mountView()
     await flushPromises()
 
-    await w.get('[data-testid="run-row-1"]').trigger('click')
-    await flushPromises()
-    // run A:1 筆 trade → setMarkers 收到 2 個 marker。
-    const aMarkers = calls.setMarkers.mock.calls.at(-1)![0]
-    expect(aMarkers).toHaveLength(2)
-    const aBars = calls.setHistory.mock.calls.at(-1)![0]
-    expect(aBars).toHaveLength(1)
+    await selectRunToEnd(w, 1)
+    // run A:跳結尾 → setHistory 全量(1 根)、setMarkers 全量(1 筆 trade → 2 marker)。
+    expect(calls.setHistory.mock.calls.at(-1)![0]).toHaveLength(1)
+    expect(calls.setMarkers.mock.calls.at(-1)![0]).toHaveLength(2)
 
-    await w.get('[data-testid="run-row-2"]').trigger('click')
-    await flushPromises()
-    // run B:2 筆 trade → setMarkers 全量替換成 4 個(非 append 累積)。
-    const bMarkers = calls.setMarkers.mock.calls.at(-1)![0]
-    expect(bMarkers).toHaveLength(4)
-    // 主圖 bars 換成 B 的 2 根。
+    await selectRunToEnd(w, 2)
+    // run B:跳結尾 → setMarkers 全量替換成 4 個(2 筆 trade);主圖 bars 換成 B 的 2 根。
+    expect(calls.setMarkers.mock.calls.at(-1)![0]).toHaveLength(4)
     const bBars = calls.setHistory.mock.calls.at(-1)![0]
     expect(bBars).toHaveLength(2)
     expect(bBars[0].time).toBe(1704070800)
   })
 
-  it('選不同 run → 權益副圖隨 run 重算(setEquityLine 新曲線)', async () => {
+  it('選不同 run → 權益副圖隨 run 重算(換 run reset 隔離,跳結尾全量重畫)', async () => {
     const w = mountView()
     await flushPromises()
 
-    await w.get('[data-testid="run-row-1"]').trigger('click')
-    await flushPromises()
+    await selectRunToEnd(w, 1)
     // run A:單筆 +100 → 曲線 [100]。
     expect(calls.setEquityLine.mock.calls.at(-1)![0].map((p: { value: number }) => p.value)).toEqual([100])
 
-    await w.get('[data-testid="run-row-2"]').trigger('click')
-    await flushPromises()
+    await selectRunToEnd(w, 2)
     // run B:+10、+20 累加 → [10, 30](重算,非沿用 A)。
     expect(calls.setEquityLine.mock.calls.at(-1)![0].map((p: { value: number }) => p.value)).toEqual([10, 30])
+  })
+})
+
+describe('RunExplorerView completedRunId 自動選取回放', () => {
+  it('completedRunId 變成某 run id → 自動重載 runs + 選取該 run(觸發回放)', async () => {
+    const fetchTrades = vi.fn().mockResolvedValue([trade(1, '100', '2024-01-01T00:00:00Z')])
+    const fetchBars = vi.fn().mockResolvedValue([bar(1704067200), bar(1704070800)])
+    const fetchBacktestRuns = vi.fn().mockResolvedValue([RUN_A, RUN_B])
+    const w = mount(RunExplorerView, {
+      props: { api: { fetchBacktestRuns, fetchTrades, fetchBars } },
+    })
+    await flushPromises()
+    // run 完成 → 父層把 completedRunId 設成剛完成的 run id。
+    await w.setProps({ completedRunId: 1 })
+    await flushPromises()
+    // 自動選取 → 主圖以回放引擎 reset(隔離)後逐根長出。
+    expect(calls.reset).toHaveBeenCalled()
+    expect(calls.updateBar).toHaveBeenCalled()
+    // 自動選取後 store 選中該 run。
+    expect(w.find('[data-testid="run-row-1"]').classes()).toContain('selected')
   })
 })

@@ -15,12 +15,15 @@ import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const calls = {
+  updateBar: vi.fn(),
   setHistory: vi.fn(),
   setMarkers: vi.fn(),
   clearPriceLines: vi.fn(),
   addPriceLine: vi.fn(),
   setEquityLine: vi.fn(),
   clearEquityLine: vi.fn(),
+  reset: vi.fn(),
+  fit: vi.fn(),
   destroy: vi.fn(),
 }
 vi.mock('@/lib/chartController', () => ({

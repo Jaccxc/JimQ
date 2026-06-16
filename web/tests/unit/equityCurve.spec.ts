@@ -69,6 +69,22 @@ describe('tradesToEquityCurve', () => {
     expect(curve.map((p) => p.value)).toEqual([40, 40])
   })
 
+  it('同一出場時間的多筆 trade → 合併成單一點(LWC setData 要求 time 嚴格遞增且唯一)', () => {
+    // 同 minute 內兩筆出場:累積到 +30,但只輸出一個 time 點(取該 time 的最終累積值)。
+    const curve = tradesToEquityCurve([
+      trade(1, '10', '2024-01-01T00:00:00Z'),
+      trade(2, '20', '2024-01-01T00:00:00Z'),
+      trade(3, '5', '2024-01-01T01:00:00Z'),
+    ])
+    // 同 time 不可重複(否則 LWC "data must be asc ordered by time" 斷言失敗)。
+    const times = curve.map((p) => p.time)
+    expect(new Set(times).size).toBe(times.length)
+    expect(curve).toEqual([
+      { time: 1704067200, value: 30 }, // 10+20 合併,取最終累積。
+      { time: 1704070800, value: 35 }, // +5。
+    ])
+  })
+
   it('可選 startingEquity:曲線從起始權益累加', () => {
     const curve = tradesToEquityCurve(
       [trade(1, '40', '2024-01-01T00:00:00Z')],
