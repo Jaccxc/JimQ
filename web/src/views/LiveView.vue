@@ -19,13 +19,23 @@ import { useChartSettingsStore } from '@/stores/chartSettings'
 import { useAppModeStore } from '@/stores/appMode'
 import { useTradeSocket } from '@/composables/useTradeSocket'
 import { useChartData } from '@/composables/useChartData'
+import { fetchLiveBars } from '@/api/bars'
+import type { FetchBarsParams } from '@/api/bars'
 
 const CHANNELS = ['bars', 'orders', 'fills', 'positions', 'pnl']
+/** Live 頁初始載入根數(近期真 klines;與 live WS 串流接續)。 */
+const LIVE_BARS_LIMIT = 1000
 
 const settings = useChartSettingsStore()
 const appMode = useAppModeStore()
 const socket = useTradeSocket({ channels: CHANNELS })
-const chartData = useChartData({ socket })
+// Live 頁初始載入用近期真 klines(/api/v1/live/bars,同 live testnet venue ~66k),
+// 取代 2024 回測 catalog(/api/v1/bars)消除價位斷裂。switchTo/reload 走同一路徑。
+const chartData = useChartData({
+  socket,
+  fetchBars: (p: FetchBarsParams) =>
+    fetchLiveBars({ symbol: p.symbol, timeframe: p.timeframe, limit: LIVE_BARS_LIMIT }),
+})
 
 async function onSwitch(sel: { symbol: string; timeframe: string }) {
   try {
