@@ -4,12 +4,17 @@
 目標:用量化交易盡可能賺錢 — 支援 live 交易、backtesting、策略開發,並整合 DL/RL 與另類資料。
 
 ## 狀態
-✅ **Phase 1 tracer bullet 已完成(卡 #2–#10)。** 整條垂直切片打通:ingest 真歷史 →
-EMA backtest(Redis Streams)→ FastAPI consumer/REST/WS → Vue3 + Lightweight Charts 顯示
-真 K 線 + 進出場 marker + SL/TP price line + 即時 PnL/部位。**一鍵 docker-compose 全棧**。
+平台底座 + operator console + testnet 真即時/paper 交易皆已完成(全程 ultra-tdd 對抗式 verify):
 
-> 端到端 demo 一步步操作見 **[`docs/RUNBOOK.md`](./docs/RUNBOOK.md)**(從零到看到圖)。
-> 真資料截圖佐證:`web/artifacts/real-e2e-dashboard.png`。
+- ✅ **Phase 1**(tracer bullet,#2–#10):ingest 真歷史 → EMA backtest(Redis Streams)→ FastAPI consumer/REST/WS → Vue3 + Lightweight Charts 真 K 線 + 進出場 + SL/TP + PnL。
+- ✅ **Phase 3**(研究管線,#13–#18):獨立 research venv、dataset builder、批量 backtest runner、MLflow、model_registry、模型驅動 backtest。
+- ✅ **Phase 4**(operator console,#20–#24):tabbed shell(Live/Backtest/Research + mode badge + 全域 KILL)、UI 跑回測、結果瀏覽器、多標的/週期、研究儀表板、start/stop/kill 控制平面。
+- ✅ **Phase 2 live**(#27/#30/#28):Binance USDT-M Futures **testnet** 真即時 BTCUSDT-PERP K 線(Live 頁)+ ema_cross **testnet paper 下單**(訂單/成交/部位/PnL)。⛔ 只 testnet 假錢。
+- ⏳ **下一步**:P2-S3(#29)live 節點控制/風控/對帳。**真錢 live 一律停等明示。**
+
+> **怎麼啟動 → 看 [`docs/runbooks/20260616-quickstart.md`](./docs/runbooks/20260616-quickstart.md)**
+> (四種模式:回測 / 真即時資料 / testnet paper 下單 / 研究)。
+> 截圖佐證:`web/artifacts/real-e2e-dashboard.png`(回測)、`p2s1b-live-candles.png`(真即時)、`p2s2-paper-trade-live.png`(paper 下單)。
 
 ## 全棧端到端 demo(一鍵)
 
