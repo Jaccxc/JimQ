@@ -13,7 +13,7 @@
  * 移除了舊版會混入 live 的中間 CandleChart(擺反且亂)。掛載時
  * appMode.setBacktest() → badge = BACKTEST。
  */
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import BacktestLauncher from '@/components/controls/BacktestLauncher.vue'
 import RunExplorerView from '@/views/RunExplorerView.vue'
 import { fetchBacktestRun } from '@/api/backtests'
@@ -51,9 +51,12 @@ const liveBars = computed<BarDTO[]>(() => market.bars)
 const liveMarkers = computed(() => fills.fills.map((f) => fillToMarker(f)))
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
+// run 完成時設成該 run id → RunExplorerView 自動選取並從頭回放(逐根 + marker + PnL)。
+const completedRunId = ref<number | null>(null)
 
 function onLaunched(runId: number) {
   // 新回測:清掉上一輪殘留,讓新 run 從頭串進主圖長出。
+  completedRunId.value = null
   market.setHistory([])
   socket.connect()
   if (pollTimer) clearInterval(pollTimer)
@@ -64,6 +67,8 @@ function onLaunched(runId: number) {
       if (run.status === 'COMPLETED' || run.status === 'FAILED') {
         if (pollTimer) clearInterval(pollTimer)
         pollTimer = null
+        // 完成 → 觸發自動載入並從頭回放(切到該 run 的歷史全量 bars+trades)。
+        if (run.status === 'COMPLETED') completedRunId.value = runId
       }
     } catch (err) {
       console.warn('輪詢 run 狀態失敗', err)
@@ -93,6 +98,7 @@ onBeforeUnmount(() => {
         :api="props.explorerApi"
         :live-bars="liveBars"
         :live-markers="liveMarkers"
+        :completed-run-id="completedRunId"
       />
     </section>
   </div>

@@ -8,7 +8,7 @@
  * 邏輯全在 useRunExplorer composable + backtestExplorer store(已 Vitest 覆蓋);
  * 本視圖僅綁定與命令式重畫(復用 ChartController/tradeMapping)。
  */
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import ReplayChart from '@/components/chart/ReplayChart.vue'
 import { useRunExplorer, type RunExplorerApi } from '@/composables/useRunExplorer'
 import type { SortKey } from '@/stores/backtestExplorer'
@@ -27,6 +27,11 @@ const props = defineProps<{
   liveMarkers?: MarkerSpec[]
   livePriceLines?: PriceLineSpec[]
   liveEquity?: EquityPoint[]
+  /**
+   * 剛完成(COMPLETED)的 run id:父層(BacktestView)在 run 完成時設此 prop →
+   * 自動重載 run 列表並選取該 run → 主圖切到該 run 的歷史全量 → 從頭回放。
+   */
+  completedRunId?: number | null
 }>()
 
 const ex = useRunExplorer({ api: props.api })
@@ -69,6 +74,16 @@ function fmt(v: string | number | null | undefined): string {
 onMounted(() => {
   ex.loadRuns()
 })
+
+// run 完成 → 自動重載 runs(讓剛完成的 run 進列表)+ 選取它 → 主圖回放。
+watch(
+  () => props.completedRunId,
+  async (runId) => {
+    if (runId == null) return
+    await ex.loadRuns()
+    await ex.selectRun(runId)
+  },
+)
 </script>
 
 <template>
