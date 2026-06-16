@@ -97,11 +97,22 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.backtest { display: flex; flex-direction: column; height: 100%; overflow-y: auto; background: #0e1117; }
+/* 改版 S4:Backtest 頁殼。大面積背景禁用 backdrop-filter(只給卡片/header),
+ * 故頁底用實心 bg token;launcher/explorer 各自玻璃化。 */
+.backtest {
+  display: flex; flex-direction: column;
+  height: 100%; overflow-y: auto;
+  background: var(--color-bg);
+  padding: calc(var(--spacing) * 3);
+  gap: calc(var(--spacing) * 3);
+}
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 16px; border-bottom: 1px solid #1c2230;
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2);
 }
-.topbar h1 { font-size: 14px; color: #d1d4dc; margin: 0; font-weight: 600; }
+.topbar h1 {
+  font-size: 16px; color: var(--color-text); margin: 0;
+  font-weight: 600; letter-spacing: -0.01em;
+}
 .explorer-cell { flex: 1; min-height: 480px; }
 </style>

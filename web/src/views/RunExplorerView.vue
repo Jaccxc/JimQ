@@ -117,60 +117,101 @@ onMounted(() => {
         {{ store.selectedRun.instrument_id }} {{ store.selectedRun.timeframe }}
       </h2>
       <h2 v-else>選一個 run 看 K 線與進出場(或啟動新回測即時串流)</h2>
-      <ReplayChart
-        :bars="chartBars"
-        :markers="chartMarkers"
-        :price-lines="chartPriceLines"
-        :equity="chartEquity"
-      />
+      <!-- 改版 S4:K 線主圖內部留預設,只給外圈玻璃框(權益副圖配色見 chartController)。 -->
+      <div class="chart-frame">
+        <ReplayChart
+          :bars="chartBars"
+          :markers="chartMarkers"
+          :price-lines="chartPriceLines"
+          :equity="chartEquity"
+        />
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
+/* 改版 S4:run 列表 + run 圖各自玻璃卡(L1)。token 來自 styles/theme.css。 */
 .run-explorer {
   display: grid;
   grid-template-columns: 420px 1fr;
-  gap: 12px;
+  gap: calc(var(--spacing) * 3);
   height: 100%;
-  padding: 12px;
+}
+.run-list,
+.run-chart {
+  background: var(--glass-l1-bg);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-l1-shadow), var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+  padding: calc(var(--spacing) * 3);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .run-list,
+  .run-chart { background: var(--glass-fallback-bg); }
+}
+.run-list h2,
+.run-chart h2 {
+  margin: 0 0 calc(var(--spacing) * 2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
 }
 .run-list table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 .run-list th {
   text-align: right;
-  padding: 6px 8px;
-  border-bottom: 1px solid #2a3142;
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+  border-bottom: 1px solid var(--glass-l1-border);
+  color: var(--color-text-muted);
+  font-weight: 500;
   cursor: pointer;
   user-select: none;
+  transition: color var(--duration-fast) var(--ease-glass);
 }
+.run-list th:hover { color: var(--color-text); }
 .run-list th:first-child,
 .run-list td:first-child {
   text-align: left;
 }
 .run-list td {
   text-align: right;
-  padding: 6px 8px;
-  border-bottom: 1px solid #1c2230;
+  padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
 }
 .run-row {
   cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-glass);
 }
 .run-row:hover {
-  background: #161b26;
+  background: rgba(255, 255, 255, 0.04);
 }
 .run-row.selected {
-  background: #1f2937;
+  background: rgba(10, 132, 255, 0.14);
 }
 .empty {
-  color: #8a93a6;
+  color: var(--color-text-faint);
   font-size: 13px;
 }
 .run-chart {
   display: flex;
   flex-direction: column;
+}
+/* K 線主圖外圈玻璃框:內部蠟燭/權益副圖由 chartController 控,此處只給框與圓角。 */
+.chart-frame {
+  flex: 1;
+  min-height: 360px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-l1-border);
+  overflow: hidden;
+  background: rgba(11, 14, 20, 0.4);
 }
 </style>

@@ -94,23 +94,60 @@ async function onSubmit() {
 </template>
 
 <style scoped>
-.launcher { padding: 8px 12px; border-bottom: 1px solid #1c2230; }
-.row { display: flex; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-label { display: flex; flex-direction: column; font-size: 10px; color: #9ca3af; gap: 2px; }
+/* 改版 S4:launcher 表單玻璃化(L1 面板)。token 來自 styles/theme.css。 */
+.launcher {
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4);
+  background: var(--glass-l1-bg);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-l1-shadow), var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .launcher { background: var(--glass-fallback-bg); }
+}
+.launcher h3 {
+  margin: 0 0 calc(var(--spacing) * 3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+.row { display: flex; gap: calc(var(--spacing) * 2); margin-bottom: calc(var(--spacing) * 2); flex-wrap: wrap; }
+label {
+  display: flex; flex-direction: column; gap: calc(var(--spacing) * 1);
+  font-size: 10px; color: var(--color-text-muted);
+}
 input, select {
-  background: #161b26; color: #d1d4dc; border: 1px solid #2a3142;
-  border-radius: 4px; padding: 4px 6px; font-size: 12px;
+  background: rgba(11, 14, 20, 0.5);
+  color: var(--color-text);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-xs);
+  padding: 5px 7px; font-size: 12px;
+  transition: border-color var(--duration-fast) var(--ease-glass),
+    box-shadow var(--duration-fast) var(--ease-glass);
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 input[type='number'] { width: 64px; }
-.actions { display: flex; align-items: center; gap: 10px; }
+.actions { display: flex; align-items: center; gap: calc(var(--spacing) * 3); margin-top: calc(var(--spacing) * 1); }
 button {
-  background: #2563eb; color: #fff; border: none; border-radius: 4px;
-  padding: 6px 14px; font-size: 12px; cursor: pointer;
+  background: var(--color-accent); color: #fff; border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: opacity var(--duration-fast) var(--ease-glass),
+    transform var(--duration-fast) var(--ease-glass);
 }
-button:disabled { opacity: 0.6; cursor: default; }
-.status { font-size: 11px; color: #9ca3af; }
-.status[data-status='COMPLETED'] { color: #22c55e; }
-.status[data-status='FAILED'] { color: #ef4444; }
-.status[data-status='RUNNING'], .status[data-status='PENDING'] { color: #eab308; }
-.err { color: #ef4444; font-size: 11px; margin: 4px 0 0; }
+button:hover:not(:disabled) { opacity: 0.9; }
+button:active:not(:disabled) { transform: scale(0.97); }
+button:disabled { opacity: 0.5; cursor: default; }
+.status { font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.status[data-status='COMPLETED'] { color: var(--color-up); }
+.status[data-status='FAILED'] { color: var(--color-down); }
+.status[data-status='RUNNING'], .status[data-status='PENDING'] { color: var(--color-accent); }
+.err { color: var(--color-down); font-size: 11px; margin: calc(var(--spacing) * 1) 0 0; }
 </style>
