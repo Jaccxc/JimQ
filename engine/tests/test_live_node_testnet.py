@@ -52,7 +52,9 @@ def _scan_real_bars(client, key):
             payload = msgspec.msgpack.decode(fields.get("payload"))
         except Exception:  # noqa: BLE001
             continue
-        if not isinstance(payload, dict) or payload.get("type") != "Bar":
+        # Nautilus Binance adapter 發 ``BinanceBar``(含擴充欄位);其餘 venue 為 ``Bar``。
+        # 認 type 結尾為 "Bar"(Bar / BinanceBar)且帶可解析 OHLC,排除非 bar 事件。
+        if not isinstance(payload, dict) or not str(payload.get("type", "")).endswith("Bar"):
             continue
         try:
             o = float(payload["open"])
