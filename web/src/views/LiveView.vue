@@ -4,7 +4,12 @@
  *
  * 即時 K 線:複用 CandleChart/ChartController + useTradeSocket 顯示來自 Redis
  * 串流的真即時 BTCUSDT-PERP(live 資料節點 → Redis Streams → consumer → WS)。
- * 含 symbol/timeframe 選擇器 + EMA(W3)。部位/PnL 面板先佔位(下單在 P2-S2)。
+ * 含 symbol/timeframe 選擇器 + EMA(W3)。
+ *
+ * 卡 #28 (P2-S2):訂單/成交/部位/PnL 面板接**真 live** 值 —— testnet 交易節點
+ * (scripts/run_live_trade.py)下 paper 單 → 事件經 Redis→consumer→WS→stores
+ * (dispatch.ts 路由)→ PnlWidget / PositionsTable / OrdersTable(成交)即時顯示。
+ * 移除 P2-S2 佔位文字(本頁不再 read-only)。
  *
  * 掛載時 appMode.setLive() → header mode badge 顯示 LIVE-TESTNET。
  * 流程同 Dashboard:onMounted → 載 REST 歷史 bars → 開 WS 串流。
@@ -14,6 +19,7 @@ import CandleChart from '@/components/chart/CandleChart.vue'
 import ChartControls from '@/components/controls/ChartControls.vue'
 import StrategyControls from '@/components/controls/StrategyControls.vue'
 import PositionsTable from '@/components/panels/PositionsTable.vue'
+import OrdersTable from '@/components/panels/OrdersTable.vue'
 import PnlWidget from '@/components/panels/PnlWidget.vue'
 import { useChartSettingsStore } from '@/stores/chartSettings'
 import { useAppModeStore } from '@/stores/appMode'
@@ -75,7 +81,7 @@ onBeforeUnmount(() => {
       <aside class="side">
         <PnlWidget />
         <PositionsTable />
-        <p class="placeholder">下單 / 部位變動將於 P2-S2 接入(本頁 read-only live 資料)。</p>
+        <OrdersTable />
       </aside>
     </main>
   </div>
@@ -92,5 +98,4 @@ onBeforeUnmount(() => {
 .chart-cell { min-height: 0; padding: 8px; display: flex; flex-direction: column; }
 .chart-cell > :last-child { flex: 1; min-height: 0; }
 .side { border-left: 1px solid #1c2230; overflow-y: auto; padding-bottom: 12px; }
-.placeholder { font-size: 11px; color: #6b7280; padding: 10px 12px; line-height: 1.5; }
 </style>
