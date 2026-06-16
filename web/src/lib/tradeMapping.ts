@@ -21,6 +21,9 @@ const NS_PER_SEC = 1_000_000_000
 const BUY_COLOR = '#26a69a'
 const SELL_COLOR = '#ef5350'
 
+/** 出場 marker 顏色(amber):與進場的多/空綠紅明確區隔,避免「同一筆畫兩次」錯覺。 */
+const EXIT_COLOR = '#f0b90b'
+
 /** priceLine 顏色。 */
 const SL_COLOR = '#ef5350'
 const TP_COLOR = '#26a69a'
@@ -30,11 +33,11 @@ function nsToSec(ts: string | number): number {
   return Math.floor(Number(ts) / NS_PER_SEC)
 }
 
-/** 與 LWC SeriesMarker 對齊的最小規格。 */
+/** 與 LWC SeriesMarker 對齊的最小規格(v5 shape 支援 arrowUp/arrowDown/circle/square)。 */
 export interface MarkerSpec {
   time: number
   position: 'aboveBar' | 'belowBar'
-  shape: 'arrowUp' | 'arrowDown'
+  shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square'
   color: string
   text: string
 }
@@ -105,8 +108,12 @@ function isoToSec(iso: string): number {
 }
 
 /**
- * persisted trade → 進場 + 出場 marker。
- * LONG:進場向上箭頭(belowBar)、出場向下箭頭(aboveBar);SHORT 相反。
+ * persisted trade → 進場 + 出場 marker(視覺可區分,卡 D)。
+ *
+ * 進場:**實心箭頭**指向部位方向(LONG=arrowUp/belowBar、SHORT=arrowDown/aboveBar),
+ *       色用多/空綠紅,文字 `Entry <side> <qty> @ <entry_price>`。
+ * 出場:**非箭頭形狀(circle)**+ 獨立 amber 色,文字 `Exit @ <exit_price> (PnL ...)`。
+ * 進場與出場的 shape 與 color 皆不同,避免 round-trip 看似「同一筆畫了兩次」。
  */
 export function tradeToMarkers(trade: import('@/api/trades').TradeRecord): MarkerSpec[] {
   const isLong = trade.side === 'LONG'
@@ -115,14 +122,15 @@ export function tradeToMarkers(trade: import('@/api/trades').TradeRecord): Marke
     position: isLong ? 'belowBar' : 'aboveBar',
     shape: isLong ? 'arrowUp' : 'arrowDown',
     color: isLong ? BUY_COLOR : SELL_COLOR,
-    text: `${trade.side} ${trade.quantity} @ ${trade.entry_price}`,
+    text: `Entry ${trade.side} ${trade.quantity} @ ${trade.entry_price}`,
   }
   const exit: MarkerSpec = {
     time: isoToSec(trade.closed_at),
+    // 出場放在部位反向的另一側,且用 circle + amber 與進場箭頭明確分離。
     position: isLong ? 'aboveBar' : 'belowBar',
-    shape: isLong ? 'arrowDown' : 'arrowUp',
-    color: isLong ? SELL_COLOR : BUY_COLOR,
-    text: `EXIT @ ${trade.exit_price}${trade.pnl != null ? ` (PnL ${trade.pnl})` : ''}`,
+    shape: 'circle',
+    color: EXIT_COLOR,
+    text: `Exit @ ${trade.exit_price}${trade.pnl != null ? ` (PnL ${trade.pnl})` : ''}`,
   }
   return [entry, exit]
 }
