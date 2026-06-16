@@ -4,9 +4,17 @@
 預設 **skip**;設 ``JIMQ_RUN_TESTNET=1`` 才跑(避免 CI/離線環境失敗)。
 
 驗收(行為):跑 live 交易節點(data+exec testnet),ema_cross 在即時 bar 觸發交叉
-下 paper 單後,**真**訂單/成交事件落地本機 Redis Streams —— 出現
-``events.order.`` 與 ``events.fills.`` topic 的真事件(OrderFilled 帶 last_qty/last_px,
-position_id 可解析),證明 paper 單真的送達 testnet 並成交(round-trip)。
+**由策略本身下一筆新 paper 單**後,**真**訂單/成交事件落地本機 Redis Streams ——
+出現由 **EMACross 策略**(strategy_id 非 ``EXTERNAL`` 且 ``reconciliation`` 為假)
+發出的 ``events.order.`` / ``events.fills.`` 真事件(OrderFilled 帶 last_qty/last_px),
+證明 paper 單真的送達 testnet 並成交(round-trip)。
+
+⚠️ 不可只掃 ``events.order.`` / ``events.fills.`` 前綴就判綠:Nautilus 在
+``reconciliation=True`` 下會把 testnet 上**既有殘留部位**以 ``strategy_id=EXTERNAL``、
+``reconciliation=True`` 重新發成 ``OrderFilled``(last_qty>0、last_px>0)。若只掃前綴,
+帳戶一有殘留部位即 false-green,根本沒驗到「策略本身下了一筆新單」。本測試因此**過濾掉**
+reconciliation / EXTERNAL 事件,只認**策略原生**(strategy_id 以 ``EMACross`` 起頭、
+``reconciliation`` 為假)的 order/fill,真正驗證策略下單行為。
 
 ⛔ testnet-only:節點硬性 ``BinanceEnvironment.TESTNET``;本測試亦驗 exec client
 為 testnet,確保非真錢路徑。
@@ -51,6 +59,27 @@ def _scan_topics(client, key, prefix):
         if isinstance(payload, dict):
             out.append((topic, payload))
     return out
+
+
+def _is_strategy_originated(payload: dict, strategy_prefix: str = "EMACross") -> bool:
+    """事件是否由**策略本身**發出(而非 reconciliation 重發既有 EXTERNAL 部位)。
+
+    Nautilus 在 ``reconciliation=True`` 下,會把 testnet 帳戶上**既有殘留部位**
+    以 ``strategy_id=EXTERNAL``、``reconciliation=True`` 重新發成 OrderFilled
+    (last_qty>0、last_px>0)。這類事件**不代表**策略下了新單,必須排除,否則
+    帳戶有殘留部位時測試會 false-green。
+
+    判定為策略原生 = ``reconciliation`` 為假 **且** ``strategy_id`` 以策略類名
+    (``EMACross``)起頭、且非 ``EXTERNAL``。
+    """
+    recon = payload.get("reconciliation")
+    # bus msgpack 序列化後 reconciliation 為真正的 bool;保險也擋字串 "True"。
+    if recon is True or (isinstance(recon, str) and recon.lower() == "true"):
+        return False
+    sid = str(payload.get("strategy_id", ""))
+    if sid == "EXTERNAL" or sid.upper() == "EXTERNAL":
+        return False
+    return sid.startswith(strategy_prefix)
 
 
 def test_testnet_paper_order_round_trip_lands_in_redis():
@@ -100,24 +129,38 @@ def test_testnet_paper_order_round_trip_lands_in_redis():
     try:
         # 等多根真 1m bar 聚合 + 觸發交叉 + 下單成交回報;最久 ~6 分鐘。
         deadline = time.time() + 360
-        fills = []
-        orders = []
+        strat_orders = []
+        strat_fills = []
         while time.time() < deadline:
-            orders = _scan_topics(client, key, "events.order.")
-            fills = _scan_topics(client, key, "events.fills.")
-            if fills:
+            # ⚠️ 只認**策略原生**事件(排除 reconciliation / EXTERNAL 重發),
+            # 否則帳戶有殘留部位時會 false-green。
+            strat_orders = [
+                (t_, p) for (t_, p) in _scan_topics(client, key, "events.order.")
+                if _is_strategy_originated(p)
+            ]
+            strat_fills = [
+                (t_, p) for (t_, p) in _scan_topics(client, key, "events.fills.")
+                if _is_strategy_originated(p)
+            ]
+            if strat_fills:
                 break
             time.sleep(5)
-        assert orders, (
-            f"未在 Redis stream {key} 看到 events.order. 訂單事件;策略未下單"
+        assert strat_orders, (
+            f"未在 Redis stream {key} 看到**策略原生**(strategy_id=EMACross、"
+            f"reconciliation=False)的 events.order. 訂單事件;策略未下新單"
+            f"(reconciliation 重發既有 EXTERNAL 部位不算)"
         )
-        assert fills, (
-            f"未在 Redis stream {key} 看到 events.fills. 成交事件;paper 單未成交"
+        assert strat_fills, (
+            f"未在 Redis stream {key} 看到**策略原生** events.fills. 成交事件;"
+            f"策略下的新 paper 單未成交(reconciliation 重發既有部位不算)"
         )
-        topic, fill = fills[0]
+        topic, fill = strat_fills[0]
         assert str(fill.get("type", "")).endswith("Filled") or "Filled" in topic, fill
         assert float(fill.get("last_qty", 0)) > 0, fill
         assert float(fill.get("last_px", 0)) > 0, fill
+        # ⛔ 雙重保險:選中的 fill 確為策略原生、非 reconciliation。
+        assert fill.get("reconciliation") in (False, None, "False", "false"), fill
+        assert str(fill.get("strategy_id", "")) != "EXTERNAL", fill
     finally:
         node.stop()
         time.sleep(1)
