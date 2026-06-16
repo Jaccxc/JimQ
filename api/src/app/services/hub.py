@@ -26,12 +26,16 @@ Envelope = dict[str, Any]
 # 預設快照 / 補洞容量(本地決策;bars 保留近 N 根,history 保留近 M 筆信封)。
 DEFAULT_BARS_HISTORY = 500
 DEFAULT_HISTORY = 2000
+# 卡 B(Live 次秒 tick):trades 採**小** ring —— 新連線只需近期幾筆成交即可讓
+# Live 圖反映形成中那根的最新跳動,不必空等下一筆 tick;且高頻不宜大量回放。
+DEFAULT_TRADES_HISTORY = 50
 # 快照採 last-value-wins(只留最新)的 channel。
 _LAST_VALUE_CHANNELS = frozenset({"pnl"})
 # 快照採 per-key 最新(每個 key 留最新一筆)的 channel 與其 key 欄位。
 _KEYED_CHANNELS = {"positions": "position_id"}
 # 快照採 recent-ring 的 channel(保留近 N 筆,序保留)。
-_RING_CHANNELS = frozenset({"bars", "orders", "fills"})
+# 卡 B:trades 也走 ring(小容量;見 DEFAULT_TRADES_HISTORY)。
+_RING_CHANNELS = frozenset({"bars", "trades", "orders", "fills"})
 
 
 @dataclass(eq=False)
@@ -85,13 +89,22 @@ class Hub:
         *,
         bars_history: int = DEFAULT_BARS_HISTORY,
         history: int = DEFAULT_HISTORY,
+        trades_history: int = DEFAULT_TRADES_HISTORY,
     ) -> None:
         self._subs: set[Subscription] = set()
         self._history: deque[Envelope] = deque(maxlen=history)
-        # 快照狀態。
+
+        # 快照狀態。各 ring 容量:bars=bars_history、trades=trades_history(小)、
+        # 其餘=DEFAULT_BARS_HISTORY。
+        def _ring_cap(ch: str) -> int:
+            if ch == "bars":
+                return bars_history
+            if ch == "trades":
+                return trades_history
+            return DEFAULT_BARS_HISTORY
+
         self._rings: dict[str, deque[Envelope]] = {
-            ch: deque(maxlen=(bars_history if ch == "bars" else DEFAULT_BARS_HISTORY))
-            for ch in _RING_CHANNELS
+            ch: deque(maxlen=_ring_cap(ch)) for ch in _RING_CHANNELS
         }
         self._last_value: dict[str, Envelope] = {}  # channel → 最新信封(pnl)
         self._keyed: dict[str, dict[str, Envelope]] = {
