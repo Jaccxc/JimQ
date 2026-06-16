@@ -11,8 +11,11 @@ import PositionsTable from '@/components/panels/PositionsTable.vue'
 import OrdersTable from '@/components/panels/OrdersTable.vue'
 import PnlWidget from '@/components/panels/PnlWidget.vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
+import BacktestLauncher from '@/components/controls/BacktestLauncher.vue'
 import { fetchBars } from '@/api/bars'
+import { fetchBacktestRun } from '@/api/backtests'
 import { useMarketStore } from '@/stores/market'
+import { useBacktestRunStore, type RunStatus } from '@/stores/backtestRun'
 import { useTradeSocket } from '@/composables/useTradeSocket'
 
 const SYMBOL = 'BTCUSDT-PERP.BINANCE'
@@ -20,7 +23,28 @@ const TIMEFRAME = '1m'
 const CHANNELS = ['bars', 'orders', 'fills', 'positions', 'pnl']
 
 const market = useMarketStore()
+const runStore = useBacktestRunStore()
 const socket = useTradeSocket({ channels: CHANNELS })
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+/** 觸發 backtest 後:確保 WS 連線、輪詢 run 狀態直到 COMPLETED/FAILED。 */
+function onLaunched(runId: number) {
+  socket.connect()
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(async () => {
+    try {
+      const run = await fetchBacktestRun(runId)
+      runStore.setStatus(run.status as RunStatus)
+      if (run.status === 'COMPLETED' || run.status === 'FAILED') {
+        if (pollTimer) clearInterval(pollTimer)
+        pollTimer = null
+      }
+    } catch (err) {
+      console.warn('輪詢 run 狀態失敗', err)
+    }
+  }, 1000)
+}
 
 onMounted(async () => {
   try {
@@ -33,7 +57,10 @@ onMounted(async () => {
   socket.connect()
 })
 
-onBeforeUnmount(() => socket.disconnect())
+onBeforeUnmount(() => {
+  socket.disconnect()
+  if (pollTimer) clearInterval(pollTimer)
+})
 </script>
 
 <template>
@@ -42,6 +69,7 @@ onBeforeUnmount(() => socket.disconnect())
       <h1>JimQ — {{ SYMBOL }} {{ TIMEFRAME }}</h1>
       <ConnectionStatus />
     </header>
+    <BacktestLauncher @launched="onLaunched" />
     <main class="grid">
       <section class="chart-cell">
         <CandleChart />
