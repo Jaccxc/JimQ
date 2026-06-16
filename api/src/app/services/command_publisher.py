@@ -18,8 +18,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from jimq_core.constants import COMMAND_STREAM_KEY
-from jimq_core.schemas import RunBacktestCommand
+from jimq_core.constants import (
+    COMMAND_STREAM_KEY,
+    COMMAND_TYPE_BUILD_DATASET,
+    COMMAND_TYPE_TRAIN,
+)
+from jimq_core.schemas import ResearchJobCommand, RunBacktestCommand
+
+# research_job 種類 → 命令平面 command_type(列舉欄位慣例,大寫字面值)。
+_JOB_TYPE_TO_COMMAND: dict[str, str] = {
+    "BUILD_DATASET": COMMAND_TYPE_BUILD_DATASET,
+    "TRAIN": COMMAND_TYPE_TRAIN,
+}
 
 
 def build_run_backtest_command(
@@ -49,7 +59,28 @@ def build_run_backtest_command(
     )
 
 
-async def publish_command(client: Any, command: RunBacktestCommand) -> str:
+def build_research_job_command(
+    *,
+    job_id: int,
+    job_type: str,
+    params: dict[str, Any],
+    correlation_id: str | None = None,
+) -> ResearchJobCommand:
+    """把 Research 儀表板的 job 請求組成 ``ResearchJobCommand`` 信封。
+
+    ``job_type`` 為 ``BUILD_DATASET`` / ``TRAIN`` 大寫字面值,映射到對應命令平面
+    ``command_type``。``correlation_id`` 未給時生成 uuid4(端到端追蹤;與
+    ``research_job`` 同欄回寫)。
+    """
+    return ResearchJobCommand(
+        command_type=_JOB_TYPE_TO_COMMAND[job_type],
+        correlation_id=correlation_id or uuid.uuid4().hex,
+        job_id=job_id,
+        params=params,
+    )
+
+
+async def publish_command(client: Any, command: Any) -> str:
     """把命令信封 XADD 到 Redis command stream(``COMMAND_STREAM_KEY``)。
 
     ``client`` 為 async Redis 介面(需 ``xadd``)。payload 為信封 JSON 字串
