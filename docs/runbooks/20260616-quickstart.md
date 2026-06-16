@@ -18,11 +18,13 @@ make exp        # 灌真歷史 + 跑一次 EMA 回測,自動重整儀表板
 
 ```bash
 make up                 # 先確保全棧在跑
-make live               # 終端 A:接 testnet 真即時 K 線(不下單)
-#   或 make paper       # 終端 A:testnet paper 下單(⛔ 假錢)
-make reload             # 終端 B:跑一次,讓儀表板接上本次串流
-# 開 http://127.0.0.1:8080 → Live 頁
+make live               # 接 testnet 真即時 K 線(不下單)
+#   或 make paper       # testnet paper 下單(⛔ 假錢)
+# 資料開始流入後儀表板自動接上 → 直接開 http://127.0.0.1:8080 → Live 頁
 ```
+
+> 不再需要 `make reload`:API 會監看本次串流的 key 並**自動熱重載**接上。
+> (`make reload` 仍保留,但通常不需,僅異常時手動重啟 api。)
 
 > `make live` / `make paper` 會卡住前景持續跑(這是正常的,它在串流);
 > 要停就在那個終端按 **Ctrl-C**。
@@ -45,7 +47,7 @@ make full-restart   # 砍掉重練:down → build → up → logs
 | `make exp` | 跑回測實驗 | Backtest |
 | `make live` | testnet 真即時 K 線(不下單) | Live |
 | `make paper` | testnet paper 下單(⛔ 假錢) | Live |
-| `make reload` | live/paper 後讓儀表板接上 | — |
+| `make reload` | 通常不需(已自動熱重載);僅異常時手動重啟 api | — |
 | `make logs` / `ps` / `down` | log / 狀態 / 停 | — |
 | `make build` / `full-restart` | 重建 | — |
 
@@ -53,7 +55,7 @@ make full-restart   # 砍掉重練:down → build → up → logs
 
 | 症狀 | 處置 |
 |---|---|
-| Live 頁有 badge 但圖空白 | `make live`/`paper` 有在跑嗎?跑一次 `make reload`。 |
+| Live 頁有 badge 但圖空白 | `make live`/`paper` 有在跑嗎?資料流入後會自動接上(約 1–2s);若仍空白才手動 `make reload`。 |
 | `-2015 Invalid API-key` | testnet 金鑰問題,到 testnet.binancefuture.com 重產(寫進 `.env.afk`)。 |
 | docker 沒權限 | 見 `DEV_CONTRACT_AFK.md`(已設好,通常重登一次生效)。 |
 
