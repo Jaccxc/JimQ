@@ -183,11 +183,23 @@ export class ChartController {
     }
   }
 
-  /** REST 歷史:整批設定。重設單調游標到歷史尾端 time(重載較舊歷史後可再串流)。 */
+  /** REST 歷史:整批設定。重設單調游標到歷史尾端 time(重載較舊歷史後可再串流)。
+   *  換標的/重載歷史時同時 fit 時間軸 + 重新開啟價格軸 autoScale(否則 Y 軸卡在
+   *  前一標的的價格範圍,如 BTC→ETH 要手動縮放)。 */
   setHistory(bars: BarDTO[]): void {
     this.series.setData(bars.map(toCandle))
-    this.chart.timeScale().fitContent()
+    this.fit()
     this.lastBarTime = bars.length ? bars[bars.length - 1].time : null
+  }
+
+  /** TradingView 式「自動對齊」:fit 時間軸 + 重新開啟價格軸 autoScale。
+   *  供換標的自動呼叫,也供 UI「Auto Fit」按鈕呼叫。手動拖曳/縮放仍可用
+   *  (LWC 預設互動不關閉);手動動過價格軸後 autoScale 會被 LWC 關掉,
+   *  按一下按鈕即重新開啟並貼合資料。 */
+  fit(): void {
+    this.chart.timeScale().fitContent()
+    // 主圖(蠟燭)在預設右側 price scale;重新開 autoScale 讓 Y 軸貼合當前資料。
+    this.chart.priceScale('right').applyOptions({ autoScale: true })
   }
 
   /** WS 即時:更新最後一根或新增(LWC series.update 語意)。

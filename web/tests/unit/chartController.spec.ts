@@ -57,6 +57,7 @@ function makeFakeChart() {
       removedSeries.push(s)
     }),
     timeScale: () => ({ fitContent: vi.fn() }),
+    priceScale: () => ({ applyOptions: vi.fn() }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
   }

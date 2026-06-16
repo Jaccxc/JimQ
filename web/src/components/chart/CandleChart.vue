@@ -26,6 +26,12 @@ const containerRef = ref<HTMLDivElement | null>(null)
 let controller: ChartController | null = null
 let historyLoaded = false
 
+/** Auto Fit 按鈕:fit 時間軸 + 重開價格軸 autoScale(TradingView 式對齊)。
+ *  手動拖曳/縮放不受影響,按一下即重新貼合當前資料。 */
+function fitChart() {
+  controller?.fit()
+}
+
 const market = useMarketStore()
 const fills = useFillsStore()
 const orders = useOrdersStore()
@@ -141,13 +147,61 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="containerRef" class="candle-chart" data-testid="candle-chart"></div>
+  <div class="candle-wrap">
+    <button
+      type="button"
+      class="fit-btn"
+      title="自動對齊(fit + auto-scale)"
+      data-testid="chart-fit-btn"
+      @click="fitChart"
+    >
+      ⤢ Fit
+    </button>
+    <div ref="containerRef" class="candle-chart" data-testid="candle-chart"></div>
+  </div>
 </template>
 
 <style scoped>
+.candle-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+}
 .candle-chart {
   width: 100%;
   height: 100%;
   min-height: 360px;
+}
+/* 浮在圖右上角的玻璃小按鈕;不擋拖曳(只佔右上一角)。 */
+.fit-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-hover-border);
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-glass),
+    border-color var(--duration-fast) var(--ease-glass);
+}
+.fit-btn:hover {
+  background: var(--accent-tint);
+  border-color: var(--accent-border);
+  color: var(--color-accent);
+}
+.fit-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 </style>

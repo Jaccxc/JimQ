@@ -192,7 +192,8 @@ onMounted(async () => {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  background: var(--color-bg);
+  /* 透明:讓 html[data-bg] 可切換背景透出。 */
+  background: transparent;
   padding: calc(var(--spacing) * 3);
   gap: calc(var(--spacing) * 3);
 }

@@ -100,7 +100,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg);
+  /* 透明:讓 html[data-bg] 可切換背景透出(玻璃面板才有東西可折射)。 */
+  background: transparent;
   gap: calc(var(--spacing) * 2);
   padding: calc(var(--spacing) * 2);
 }
