@@ -77,3 +77,36 @@ def query_bars(
         end=end,
     )
     return [BarDTO.from_nautilus_bar(b) for b in bars]
+
+
+def query_bar_range(
+    symbol: str,
+    timeframe: str,
+    *,
+    catalog_path: str | Path | None = None,
+) -> dict[str, int | None]:
+    """回 symbol+timeframe 在 catalog 的實際資料區間。
+
+    回 ``{"start": min_ts_ns, "end": max_ts_ns, "count": n}``(ts 為 bar ts_init
+    奈秒)。未知 symbol/timeframe、不存在 catalog、空區間皆回
+    ``{"start": None, "end": None, "count": 0}``。供前端 launcher 動態填預設日期。
+
+    本函式為同步阻塞;呼叫端負責 threadpool 包裝。
+    """
+    bt_str = bar_type_str(symbol, timeframe)
+    empty: dict[str, int | None] = {"start": None, "end": None, "count": 0}
+    if bt_str is None:
+        return empty
+
+    path = Path(catalog_path) if catalog_path is not None else DEFAULT_CATALOG_PATH
+    if not path.exists():
+        return empty
+
+    catalog = ParquetDataCatalog(path=str(path))
+    bar_type = BarType.from_str(bt_str)
+    bars: list[Bar] = catalog.query(data_cls=Bar, identifiers=[str(bar_type)])
+    if not bars:
+        return empty
+
+    ts = [int(b.ts_init) for b in bars]
+    return {"start": min(ts), "end": max(ts), "count": len(ts)}

@@ -17,10 +17,19 @@ import os
 from fastapi import APIRouter, Query
 from fastapi.concurrency import run_in_threadpool
 from jimq_core.schemas import BarDTO
+from pydantic import BaseModel
 
 from ...services import store
 
 router = APIRouter(tags=["bars"])
+
+
+class BarRange(BaseModel):
+    """某 symbol+timeframe 在 catalog 的資料區間(bar ts_init 奈秒;空則 None/0)。"""
+
+    start: int | None
+    end: int | None
+    count: int
 
 
 def _catalog_path() -> str | None:
@@ -44,3 +53,22 @@ async def get_bars(
         end,
         catalog_path=_catalog_path(),
     )
+
+
+@router.get("/bars/range", response_model=BarRange)
+async def get_bars_range(
+    symbol: str = Query(..., description="如 BTCUSDT-PERP.BINANCE"),
+    timeframe: str = Query(..., description="如 1m / 5m"),
+) -> BarRange:
+    """回該 symbol+timeframe 在 catalog 的實際 {start, end, count}。
+
+    供前端 launcher 掛載時動態填**有資料的**預設日期(取代寫死區間);
+    空 catalog / 未知 symbol 回 start/end=None、count=0。
+    """
+    rng = await run_in_threadpool(
+        store.query_bar_range,
+        symbol,
+        timeframe,
+        catalog_path=_catalog_path(),
+    )
+    return BarRange(**rng)
