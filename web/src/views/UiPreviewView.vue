@@ -230,11 +230,9 @@ const rows = [
 </template>
 
 <style scoped>
-/* 預覽頁底:大面積禁 backdrop-filter,用次層實心 bg + 一點漸層讓玻璃高光可見。 */
+/* 預覽頁底:透明,讓可切換背景(html[data-bg]::before,backgrounds.css)透出,
+   使玻璃面板折射/高光在各背景上可被驗收。大面積仍禁 backdrop-filter(契約)。 */
 .preview-bg {
-  background:
-    radial-gradient(1200px 600px at 80% -10%, var(--ambient-accent), transparent 60%),
-    radial-gradient(900px 500px at 0% 110%, var(--ambient-data-line), transparent 60%),
-    var(--color-bg);
+  background: transparent;
 }
 </style>
