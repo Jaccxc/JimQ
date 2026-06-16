@@ -1,0 +1,148 @@
+/*
+ * JimQ 可切換 app 背景(改版:讓 glassmorphism 顯現)。
+ *
+ * 緣由:玻璃面板的 blur/折射/高光需要底層背景「有層次/有色彩」才會顯現;
+ * 單一純色 --bg 讓玻璃糊在背景上。本檔提供 5 種深色背景設計,由根元素
+ * html[data-bg="<id>"] 命中(id 由 stores/appearance.ts 管理 + persist)。
+ *
+ * 鐵律:
+ * - 大面積背景禁 backdrop-filter(效能);用 gradient / pseudo-element / SVG。
+ * - 動畫只用 transform/opacity,且尊重 prefers-reduced-motion。
+ * - 每種背景上玻璃面板(L1)文字對比 ≥ 4.5:1(背景整體仍偏深,色團低飽和)。
+ *
+ * 套用層:背景畫在固定全螢幕 ::before 圖層(z 在內容之下),App 外殼/工作區
+ * 設為透明讓背景透出(見 App.vue / AppShell.vue)。
+ */
+
+/* 背景固定全螢幕底圖層;內容在其上。color-scheme 維持 dark。 */
+html {
+  background: var(--color-bg);
+}
+
+html::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  /* 預設(未設 data-bg 前)= 純色底,避免閃白。 */
+  background: var(--color-bg);
+}
+
+/* 細噪點 / 動態色球等額外圖層用第二個 pseudo。 */
+html::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: transparent;
+}
+
+/* ============================================================
+ * 1) Aurora Mesh — 多個柔和 radial-gradient 色團(藍/紫/青)在深底融合。
+ *    Apple 桌布感。預設。
+ * ============================================================ */
+html[data-bg='aurora']::before {
+  background:
+    radial-gradient(45% 55% at 18% 18%, rgba(29, 78, 216, 0.42) 0%, transparent 62%),
+    radial-gradient(50% 55% at 82% 26%, rgba(124, 58, 237, 0.38) 0%, transparent 60%),
+    radial-gradient(55% 60% at 62% 102%, rgba(14, 116, 144, 0.4) 0%, transparent 62%),
+    radial-gradient(40% 45% at 8% 88%, rgba(10, 132, 255, 0.28) 0%, transparent 60%),
+    linear-gradient(160deg, #0c1018 0%, #0b0e14 55%, #0a0c12 100%);
+}
+
+/* ============================================================
+ * 2) Ambient Orbs — 幾顆模糊發光色球,緩慢飄移;玻璃在其上折射最明顯。
+ *    色球用 ::after 的 radial-gradient 圖層 + transform 飄移動畫。
+ * ============================================================ */
+html[data-bg='orbs']::before {
+  background:
+    radial-gradient(circle, #0b0e14 0%, #090c12 100%);
+}
+html[data-bg='orbs']::after {
+  background:
+    radial-gradient(22% 26% at 22% 32%, rgba(37, 99, 235, 0.55) 0%, transparent 70%),
+    radial-gradient(20% 24% at 78% 64%, rgba(147, 51, 234, 0.5) 0%, transparent 70%),
+    radial-gradient(18% 22% at 58% 14%, rgba(8, 145, 178, 0.5) 0%, transparent 70%),
+    radial-gradient(20% 24% at 40% 86%, rgba(10, 132, 255, 0.4) 0%, transparent 70%);
+  /* 柔化色球邊緣(此圖層不在大面積內容之上,僅背景,效能可接受)。 */
+  filter: blur(40px);
+  animation: jimq-orb-drift 26s var(--ease-glass) infinite alternate;
+  will-change: transform;
+}
+
+@keyframes jimq-orb-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2.5%, -2%, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(-2%, 2.5%, 0) scale(1.02);
+  }
+}
+
+/* ============================================================
+ * 3) Mesh Gradient + Grain — 對角漸層 + 微噪點 + vignette,質感細膩。
+ *    噪點用 SVG fractalNoise data-uri 平鋪在 ::after。
+ * ============================================================ */
+html[data-bg='grain']::before {
+  background:
+    radial-gradient(120% 120% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(135deg, #18223c 0%, #0d1019 45%, #1c1432 100%);
+}
+html[data-bg='grain']::after {
+  /* fractalNoise 微噪點(低不透明,僅增加質感、不傷可讀性)。 */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+}
+
+/* ============================================================
+ * 4) Grid Glow — 深底 + 極淡格線 + 局部光暈(交易/科技感)。
+ *    格線用 repeating-linear-gradient,光暈用 ::before 的 radial。
+ * ============================================================ */
+html[data-bg='grid']::before {
+  background:
+    radial-gradient(55% 50% at 50% -8%, rgba(10, 132, 255, 0.3) 0%, transparent 60%),
+    radial-gradient(45% 45% at 88% 108%, rgba(124, 58, 237, 0.2) 0%, transparent 60%),
+    #090c12;
+}
+html[data-bg='grid']::after {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 44px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 44px
+    );
+  /* 中心亮、邊緣淡的格線(用 mask 讓格線往邊緣淡出)。 */
+  -webkit-mask-image: radial-gradient(80% 80% at 50% 35%, #000 0%, transparent 90%);
+  mask-image: radial-gradient(80% 80% at 50% 35%, #000 0%, transparent 90%);
+}
+
+/* ============================================================
+ * 5) Deep Gradient(極簡)— 單一方向深色漸層 + 頂部微光,最克制,保底。
+ * ============================================================ */
+html[data-bg='minimal']::before {
+  background:
+    radial-gradient(70% 40% at 50% -5%, rgba(10, 132, 255, 0.12) 0%, transparent 55%),
+    linear-gradient(180deg, #141a26 0%, #0b0e14 58%, #080a0f 100%);
+}
+
+/* 尊重 prefers-reduced-motion:停掉色球飄移。 */
+@media (prefers-reduced-motion: reduce) {
+  html[data-bg='orbs']::after {
+    animation: none;
+  }
+}

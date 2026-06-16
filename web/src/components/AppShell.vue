@@ -14,6 +14,7 @@
  */
 import { inject } from 'vue'
 import ConnectionStatus from '@/components/ConnectionStatus.vue'
+import BackgroundPicker from '@/components/controls/BackgroundPicker.vue'
 import { GlassToolbar } from '@/components/ui/glass'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -50,6 +51,7 @@ async function onKill() {
           {{ appMode.badgeLabel }}
         </Badge>
         <ConnectionStatus />
+        <BackgroundPicker />
         <Button
           variant="destructive"
           size="sm"
@@ -74,8 +76,9 @@ async function onKill() {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  /* 大面積背景禁 backdrop-filter(契約):頁底用實心 bg token。 */
-  background: var(--color-bg);
+  /* 改版(背景切換):外殼透明,讓 html[data-bg]::before 的背景圖層透出,
+     使玻璃面板(L1)的 blur/折射/高光顯現。大面積仍禁 backdrop-filter(契約)。 */
+  background: transparent;
 }
 
 /* L3 玻璃 header 由 GlassToolbar 提供;此處只調間距/高度。 */
@@ -148,11 +151,11 @@ async function onKill() {
   font-weight: 700;
 }
 
-/* 深色玻璃工作區:router-view 容器。大面積故不疊 backdrop-filter,用次層實心 bg。 */
+/* 深色玻璃工作區:router-view 容器。透明讓背景圖層透出(玻璃面板在其上顯現)。 */
 .shell-body {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg);
+  background: transparent;
 }
 </style>
