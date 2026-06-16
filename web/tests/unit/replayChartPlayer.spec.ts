@@ -69,6 +69,7 @@ describe('ReplayChart 接回放引擎', () => {
         markers: [],
         priceLines: [],
         equity: [{ time: 200, value: 10 }],
+        replay: true,
       },
     })
     await flushPromises()
@@ -81,12 +82,12 @@ describe('ReplayChart 接回放引擎', () => {
 
   it('換 run(bars prop 變)→ 重新 load 並自動從頭播放', async () => {
     const w = mount(ReplayChart, {
-      props: { bars: [bar(100)], markers: [], priceLines: [], equity: [] },
+      props: { bars: [bar(100)], markers: [], priceLines: [], equity: [], replay: true },
     })
     await flushPromises()
     player.load.mockClear()
     player.play.mockClear()
-    await w.setProps({ bars: [bar(300), bar(400)], markers: [], priceLines: [], equity: [] })
+    await w.setProps({ bars: [bar(300), bar(400)], markers: [], priceLines: [], equity: [], replay: true })
     await flushPromises()
     expect(player.load).toHaveBeenCalled()
     expect(player.load.mock.calls.at(-1)![0].bars).toHaveLength(2)
@@ -96,7 +97,7 @@ describe('ReplayChart 接回放引擎', () => {
   it('控制列 emit → 轉接到引擎方法', async () => {
     player.total.value = 5
     const w = mount(ReplayChart, {
-      props: { bars: [bar(100)], markers: [], priceLines: [], equity: [] },
+      props: { bars: [bar(100)], markers: [], priceLines: [], equity: [], replay: true },
     })
     await flushPromises()
     const controls = w.findComponent({ name: 'ReplayControls' })
@@ -118,7 +119,7 @@ describe('ReplayChart 接回放引擎', () => {
 
   it('空 bars → 不自動播放(load 空,play 不呼叫)', async () => {
     mount(ReplayChart, {
-      props: { bars: [], markers: [], priceLines: [], equity: [] },
+      props: { bars: [], markers: [], priceLines: [], equity: [], replay: true },
     })
     await flushPromises()
     expect(player.play).not.toHaveBeenCalled()

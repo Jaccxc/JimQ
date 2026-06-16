@@ -124,6 +124,7 @@ onMounted(() => {
           :markers="chartMarkers"
           :price-lines="chartPriceLines"
           :equity="chartEquity"
+          :replay="hasSelectedRun"
         />
       </div>
     </div>
