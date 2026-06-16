@@ -347,16 +347,20 @@ name = "jimq-engine"
 version = "0.1.0"
 source = { editable = "engine" }
 dependencies = [
+    { name = "asyncpg" },
     { name = "jimq-core" },
     { name = "nautilus-trader" },
     { name = "redis" },
+    { name = "sqlalchemy" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "asyncpg", specifier = ">=0.29" },
     { name = "jimq-core", editable = "libs/jimq_core" },
     { name = "nautilus-trader", specifier = "==1.228.0" },
     { name = "redis", specifier = ">=5" },
+    { name = "sqlalchemy", specifier = ">=2.0.25" },
 ]
 
 [[package]]

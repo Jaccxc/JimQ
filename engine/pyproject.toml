@@ -8,6 +8,10 @@ dependencies = [
     "jimq-core",
     "nautilus_trader==1.228.0",
     "redis>=5",
+    # 卡 #20 (W1) command worker:用 app 級 SQLAlchemy 回寫 backtest_run 狀態
+    # (非手動 psql;鐵律 2 精神)。只連 localhost(鐵律 4)。
+    "sqlalchemy>=2.0.25",
+    "asyncpg>=0.29",
 ]
 
 [tool.uv.sources]
