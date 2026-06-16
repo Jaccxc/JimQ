@@ -9,9 +9,10 @@
  *
  * 提交成功會 emit('launched', runId),讓父層(Dashboard)開始訂 WS / 輪詢狀態。
  */
-import { ref } from 'vue'
-import { useBacktestLauncher } from '@/composables/useBacktestLauncher'
+import { ref, onMounted, watch } from 'vue'
+import { useBacktestLauncher, defaultRange } from '@/composables/useBacktestLauncher'
 import { useBacktestRunStore } from '@/stores/backtestRun'
+import { fetchBarRange } from '@/api/bars'
 
 const emit = defineEmits<{ (e: 'launched', runId: number): void }>()
 
@@ -23,12 +24,37 @@ const timeframe = ref('1m')
 const strategy = ref('ema_cross')
 const fastPeriod = ref(3)
 const slowPeriod = ref(8)
-const start = ref('2023-11-14T22:13')
-const end = ref('2023-11-14T22:46')
+const start = ref('2024-01-01T00:00')
+const end = ref('2024-01-02T00:00')
+// 動態預設提示:catalog 無資料時顯示警示,讓使用者知道為何用 fallback 區間。
+const rangeHint = ref('')
 
 const submitting = ref(false)
 const launcher = useBacktestLauncher()
 const runStore = useBacktestRunStore()
+
+/**
+ * 依目前 symbol/timeframe 向後端查 catalog 實際資料區間,把 start/end 預設填**有
+ * 資料的**最後一段(確保開頁直接 Run 就有 K 線、通常有成交)。空 catalog → fallback
+ * + 提示。網路失敗時靜默保留現值。
+ */
+async function applyDefaultRange() {
+  try {
+    const range = await fetchBarRange({ symbol: symbol.value, timeframe: timeframe.value })
+    const dr = defaultRange(range)
+    start.value = dr.start
+    end.value = dr.end
+    rangeHint.value = dr.hasData
+      ? ''
+      : `catalog 無 ${symbol.value} ${timeframe.value} 資料,使用預設區間(可能無 K 線)`
+  } catch {
+    // 後端不可達時保留現有預設值;不阻擋使用者手動填。
+  }
+}
+
+onMounted(applyDefaultRange)
+// 切換 symbol/timeframe 時重新對齊有資料的區間。
+watch([symbol, timeframe], applyDefaultRange)
 
 function toIso(local: string): string {
   // datetime-local 無時區;以 UTC 解讀(後端契約 timezone-aware)。
@@ -89,6 +115,7 @@ async function onSubmit() {
         {{ runStore.status }}<template v-if="runStore.runId"> · #{{ runStore.runId }}</template>
       </span>
     </div>
+    <p v-if="rangeHint" class="hint">{{ rangeHint }}</p>
     <p v-if="runStore.error" class="err">{{ runStore.error }}</p>
   </form>
 </template>
@@ -150,4 +177,5 @@ button:disabled { opacity: 0.5; cursor: default; }
 .status[data-status='FAILED'] { color: var(--color-down); }
 .status[data-status='RUNNING'], .status[data-status='PENDING'] { color: var(--color-accent); }
 .err { color: var(--color-down); font-size: 11px; margin: calc(var(--spacing) * 1) 0 0; }
+.hint { color: var(--color-text-muted); font-size: 11px; margin: calc(var(--spacing) * 1) 0 0; }
 </style>

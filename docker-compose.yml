@@ -70,7 +70,8 @@ services:
 
   # --- FastAPI 後端(卡 #4/#7/#8;#10 容器化)---------------------------------
   # 啟動先 alembic upgrade head(鐵律 2)再 uvicorn。讀 bus DB0(@latest 解析
-  # engine 寫入的 stream key)→ consumer → hub → WS。REST /bars 讀共享 catalog volume。
+  # engine 寫入的 stream key)→ consumer → hub → WS。REST /bars 讀共享 catalog
+  # (bind mount 主機 ./data/catalog → /data/catalog,容器直接看到主機 parquet)。
   api:
     build:
       context: .
@@ -97,7 +98,7 @@ services:
       JIMQ_CATALOG_PATH: /data/catalog
       ENVIRONMENT: local
     volumes:
-      - catalog-data:/data/catalog
+      - ./data/catalog:/data/catalog
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     restart: unless-stopped
@@ -137,7 +138,7 @@ services:
       EMA_SLOW: ${EMA_SLOW:-8}
       JIMQ_SYNTHETIC: ${JIMQ_SYNTHETIC:-0}
     volumes:
-      - catalog-data:/data/catalog
+      - ./data/catalog:/data/catalog
     restart: "no"
 
   # --- engine command worker(卡 #20 W1;控制平面常駐消費端)-------------------
@@ -166,12 +167,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-jimq}
       JIMQ_CATALOG_PATH: /data/catalog
     volumes:
-      - catalog-data:/data/catalog
+      - ./data/catalog:/data/catalog
     restart: unless-stopped
 
 volumes:
   redis-data:
   postgres-data:
-  catalog-data:
   mlflow-db:
   mlflow-artifacts:
