@@ -79,7 +79,10 @@ onBeforeUnmount(() => {
     <main class="grid">
       <section class="chart-cell">
         <ChartControls @switch="onSwitch" />
-        <CandleChart />
+        <!-- ⛔ K 線蠟燭內部不 styling;只外圈 L1 玻璃框。 -->
+        <div class="chart-frame">
+          <CandleChart />
+        </div>
       </section>
       <aside class="side">
         <PnlWidget />
@@ -91,14 +94,64 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.live { display: flex; flex-direction: column; height: 100%; background: #0e1117; }
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 16px; border-bottom: 1px solid #1c2230;
+/* 改版 S3:Live 駕駛艙殼。大面積背景禁 backdrop-filter → 頁底用實心 bg token;
+ * 控制列/面板/圖框各自玻璃化。佈局(中圖 / 右部位)維持。 */
+.live {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg);
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 2);
 }
-.topbar h1 { font-size: 14px; color: #d1d4dc; margin: 0; font-weight: 600; }
-.grid { flex: 1; display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
-.chart-cell { min-height: 0; padding: 8px; display: flex; flex-direction: column; }
-.chart-cell > :last-child { flex: 1; min-height: 0; }
-.side { border-left: 1px solid #1c2230; overflow-y: auto; padding-bottom: 12px; }
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
+}
+.topbar h1 {
+  font-size: 15px;
+  color: var(--color-text);
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: calc(var(--spacing) * 2);
+  min-height: 0;
+}
+.chart-cell {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 2);
+}
+.chart-frame {
+  flex: 1;
+  min-height: 0;
+  /* L1 玻璃外框(不碰圖內);圖表畫布鋪滿框內。 */
+  background: var(--glass-l1-bg);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-l1-shadow), var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l1-blur)) saturate(var(--glass-l1-saturate));
+  overflow: hidden;
+  padding: calc(var(--spacing) * 1);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .chart-frame { background: var(--glass-fallback-bg); }
+}
+.chart-frame > :last-child { width: 100%; height: 100%; }
+.side {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 2);
+  padding-bottom: calc(var(--spacing) * 2);
+}
 </style>

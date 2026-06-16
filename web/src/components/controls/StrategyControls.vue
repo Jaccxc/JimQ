@@ -5,9 +5,14 @@
  * Start / Stop 目標策略 → 經 useStrategyControl 發控制命令到命令平面。狀態回饋
  * 顯示最近一次送出的命令(真實 RUNNING/STOPPED 狀態回流走既有 WS / 輪詢)。
  * control composable 可注入(測試決定論);預設用真實 REST client。
+ *
+ * 改版 S3:控制列玻璃化(L3 GlassToolbar)+ Apple 藍 start / 暖色 stop 按鈕 +
+ * 節點狀態徽章 + 風控摘要。保留邏輯/store 綁定與 data-testid 不變。
  */
 import { computed, inject } from 'vue'
 import { useStrategyControl, type ControlApi } from '@/composables/useStrategyControl'
+import { GlassToolbar } from '@/components/ui/glass'
+import { Badge } from '@/components/ui/badge'
 
 const props = withDefaults(
   defineProps<{
@@ -32,8 +37,10 @@ const nodeStatus = computed(() => (control.store.killed ? 'KILLED' : 'RUNNING'))
 </script>
 
 <template>
-  <div class="strategy-controls" data-testid="strategy-controls">
-    <span class="label">Strategy: {{ props.strategyId }}</span>
+  <GlassToolbar class="strategy-controls" data-testid="strategy-controls">
+    <span class="label">Strategy</span>
+    <Badge variant="secondary" class="strategy-id">{{ props.strategyId }}</Badge>
+
     <button
       class="ctl start"
       type="button"
@@ -52,40 +59,62 @@ const nodeStatus = computed(() => (control.store.killed ? 'KILLED' : 'RUNNING'))
     >
       Stop
     </button>
+
     <span v-if="control.store.lastCommand" class="status" data-testid="strategy-status">
       {{ control.store.lastCommand.command_type }}
     </span>
-    <span
+
+    <Badge
+      :variant="nodeStatus === 'KILLED' ? 'down' : 'up'"
       class="node-status"
-      :class="{ killed: nodeStatus === 'KILLED' }"
       data-testid="node-status"
     >
       Node: {{ nodeStatus }}
-    </span>
+    </Badge>
+
     <span class="risk-summary" data-testid="risk-summary" title="生效中的 Nautilus 原生風控">
       Risk: max notional {{ props.maxNotional }} USDT · rate {{ props.orderRateLimit }}
     </span>
-  </div>
+  </GlassToolbar>
 </template>
 
 <style scoped>
 .strategy-controls {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 12px; border-bottom: 1px solid #1c2230;
+  border-radius: var(--radius-md);
+  gap: calc(var(--spacing) * 2);
 }
-.label { font-size: 12px; color: #9ca3af; }
+.label { font-size: 12px; color: var(--color-text-muted); }
+.strategy-id { font-variant-numeric: tabular-nums; }
 .ctl {
-  font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 4px;
-  cursor: pointer; border: 1px solid #334155; background: #1f2937; color: #d1d4dc;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: #fff;
+  transition: opacity var(--duration-fast) var(--ease-glass),
+    transform var(--duration-fast) var(--ease-glass);
 }
-.ctl:disabled { cursor: not-allowed; opacity: 0.6; }
-.start:hover:not(:disabled) { background: #14532d; color: #86efac; border-color: #166534; }
-.stop:hover:not(:disabled) { background: #422006; color: #fbbf24; border-color: #b45309; }
-.status { font-size: 11px; color: #6b7280; }
-.node-status {
-  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
-  color: #86efac; background: #14532d33; border: 1px solid #166534;
+.ctl:active:not(:disabled) { transform: scale(0.97); }
+.ctl:disabled { cursor: not-allowed; opacity: 0.5; }
+.start { background: var(--color-accent); }
+.start:hover:not(:disabled) { opacity: 0.9; }
+.stop {
+  background: var(--color-down-pill);
+  color: var(--color-down);
+  border-color: rgba(255, 92, 92, 0.32);
 }
-.node-status.killed { color: #fca5a5; background: #7f1d1d33; border-color: #b91c1c; }
-.risk-summary { font-size: 11px; color: #9ca3af; margin-left: auto; }
+.stop:hover:not(:disabled) { background: rgba(255, 92, 92, 0.24); }
+.status {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.risk-summary {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
 </style>
