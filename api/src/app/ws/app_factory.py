@@ -25,6 +25,7 @@ from fastapi import FastAPI
 
 from jimq_core.constants import REDIS_BUS_DB
 
+from ..services.consumer_supervisor import ConsumerSupervisor
 from ..services.hub import Hub
 from ..services.nautilus_consumer import run_consumer
 from .stream import register_ws
@@ -110,6 +111,58 @@ def make_streaming_lifespan(
             except (asyncio.CancelledError, Exception):  # noqa: BLE001
                 pass
             await client.aclose()
+
+    return lifespan
+
+
+def make_hotreload_lifespan(
+    *,
+    redis_url: str | None = None,
+    client: Any = None,
+    poll_interval: float = 1.0,
+):
+    """@latest 模式 lifespan:用 ConsumerSupervisor 熱重載 consumer。
+
+    監看 ``LATEST_STREAM_KEY``:engine(make live/paper/exp)後起寫新 key 時,
+    自動停舊 consumer、``hub.clear()``、起新 consumer,免手動 ``make reload``。
+
+    ``client`` 可注入(測試用);未注入時連 localhost DB0 bus。app.state 掛上
+    ``hub`` / ``consumer_supervisor`` / ``consumer_supervisor_task`` 供關閉與測試。
+    """
+    if redis_url is None:
+        redis_url = bus_redis_url()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        hub = Hub()
+        app.state.hub = hub
+        owns_client = client is None
+        redis_client = aioredis.from_url(redis_url) if owns_client else client
+        supervisor = ConsumerSupervisor(
+            client=redis_client,
+            hub=hub,
+            consumer_factory=run_consumer,
+            poll_interval=poll_interval,
+            latest_key=LATEST_STREAM_KEY,
+        )
+        app.state.consumer_supervisor = supervisor
+        task = asyncio.create_task(supervisor.run())
+        app.state.consumer_supervisor_task = task
+        try:
+            yield
+        finally:
+            await supervisor.stop()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+            if owns_client:
+                await redis_client.aclose()
+            else:
+                # 注入的 client 由呼叫端管理生命週期;若有 aclose 仍禮貌關閉。
+                aclose = getattr(redis_client, "aclose", None)
+                if aclose is not None:
+                    await aclose()
 
     return lifespan
 

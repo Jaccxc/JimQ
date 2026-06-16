@@ -39,15 +39,15 @@ ps: ## 看服務狀態
 	$(COMPOSE) ps
 
 # ── live(連 Binance testnet,需 .env.afk 金鑰;先 make up)──────────
-# 用法:此終端跑 make live(或 paper)→ 另開終端跑一次 make reload → 開瀏覽器。
+# 用法:此終端跑 make live(或 paper)→ 開瀏覽器即可,儀表板會自動接上本次串流。
 live: ## 接 testnet 真即時 K 線(read-only,不下單)
-	@echo "ℹ️  資料開始流入後,另開終端跑一次 'make reload',再開 http://127.0.0.1:8080 → Live 頁"
+	@echo "ℹ️  資料開始流入後儀表板自動接上 → 開 http://127.0.0.1:8080 → Live 頁(免 make reload)"
 	uv run python scripts/run_live_data.py
 
 paper: ## testnet paper 下單(⛔ 假錢,真在 testnet 成交)
-	@echo "ℹ️  下單開始後,另開終端跑一次 'make reload',再開 http://127.0.0.1:8080 → Live 頁"
+	@echo "ℹ️  下單開始後儀表板自動接上 → 開 http://127.0.0.1:8080 → Live 頁(免 make reload)"
 	uv run python scripts/run_live_trade.py
 
-reload: ## live/paper 開跑後,讓儀表板接上本次串流(跑一次)
+reload: ## 通常不需(API 已自動熱重載);僅異常時手動重啟 api 接上串流
 	$(COMPOSE) restart api
-	@echo "✅ 儀表板已接上 → 開 http://127.0.0.1:8080"
+	@echo "✅ 已手動重啟 api → 開 http://127.0.0.1:8080"

@@ -3,9 +3,11 @@
 Stripped fork of boilerplate v0.15.0 ``main.py``: removed crudadmin mount and
 admin lifespan. Wires the resource/health router + settings, and (卡 #7) mounts
 the WebSocket streaming gateway with a composed lifespan that — alongside the
-boilerplate Redis-cache lifespan — creates the in-process hub and, when a
-Nautilus stream key is configured (``JIMQ_STREAM_KEY``), starts the consumer
-task reading the Redis Streams bus (localhost DB0).
+boilerplate Redis-cache lifespan — creates the in-process hub and starts the
+Nautilus consumer reading the Redis Streams bus (localhost DB0). In ``@latest``
+mode a ConsumerSupervisor hot-reloads the consumer when the engine writes a new
+stream key (no ``make reload`` needed); a literal ``JIMQ_STREAM_KEY`` pins one
+stream as before.
 """
 
 import logging
@@ -13,7 +15,6 @@ import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-import redis.asyncio as aioredis
 from fastapi import FastAPI
 
 from .api import router
@@ -23,31 +24,12 @@ from .services.hub import Hub
 from .ws.app_factory import (
     LATEST_SENTINEL,
     LATEST_STREAM_KEY,
-    _as_str,
-    bus_redis_url,
+    make_hotreload_lifespan,
     make_streaming_lifespan,
 )
 from .ws.stream import register_ws
 
 logger = logging.getLogger(__name__)
-
-
-async def _resolve_stream_key_async() -> str | None:
-    """解析 ``JIMQ_STREAM_KEY``(支援 ``@latest`` sentinel,讀 bus DB0)。
-
-    ``@latest`` 需查 Redis 的已知 key(engine backtest 寫入),故用短暫 async
-    client 在 lifespan 內解析(async get 需 await,故不直接用同步 resolve_stream_key)。
-    """
-    configured = os.environ.get("JIMQ_STREAM_KEY")
-    if not configured:
-        return None
-    if configured != LATEST_SENTINEL:
-        return configured
-    client = aioredis.from_url(bus_redis_url())
-    try:
-        return _as_str(await client.get(LATEST_STREAM_KEY))
-    finally:
-        await client.aclose()
 
 
 def _composed_lifespan():
@@ -57,15 +39,23 @@ def _composed_lifespan():
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         async with boilerplate(app):
-            stream_key = await _resolve_stream_key_async()
-            if stream_key:
-                logger.info("串流 consumer 啟動,stream key = %s", stream_key)
-                streaming = make_streaming_lifespan(stream_key=stream_key)
+            configured = os.environ.get("JIMQ_STREAM_KEY")
+            if configured == LATEST_SENTINEL:
+                # @latest 模式:用 supervisor 監看 LATEST_STREAM_KEY 熱重載,
+                # engine(make live/paper/exp)後起寫新 key 即自動接上,免 make reload。
+                logger.info("串流 consumer 熱重載模式啟動(監看 %s)", LATEST_STREAM_KEY)
+                hotreload = make_hotreload_lifespan()
+                async with hotreload(app):
+                    yield
+            elif configured:
+                # 字面 key 模式:釘死該 key,維持原本單一 consumer(不監看)。
+                logger.info("串流 consumer 啟動,stream key = %s", configured)
+                streaming = make_streaming_lifespan(stream_key=configured)
                 async with streaming(app):
                     yield
             else:
                 # 無 stream key:仍建 hub 讓 WS 端點可用(等未來灌入)。
-                logger.info("未設 JIMQ_STREAM_KEY 或 @latest 尚無資料;僅啟用空 hub")
+                logger.info("未設 JIMQ_STREAM_KEY;僅啟用空 hub")
                 app.state.hub = Hub()
                 yield
 

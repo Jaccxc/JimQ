@@ -129,6 +129,35 @@ async def test_backfill_respects_channel_filter():
 
 
 @pytest.mark.asyncio
+async def test_clear_empties_snapshot_but_keeps_subscribers():
+    """clear() 清空快照(bars/pnl/positions),但保留現有訂閱者連線。
+
+    熱重載切 stream 後,新 WS client 不應收到上一個 run 的殘留 bars/部位/pnl,
+    但已連上的訂閱者連線不該被斷(其 queue 之後仍能收新 run 的信封)。
+    """
+    hub = Hub()
+    sub = hub.subscribe({"bars", "pnl", "positions"})
+    await hub.publish(_env("bars", 1, close="100"))
+    await hub.publish(_env("pnl", 2, total="500"))
+    await hub.publish(_env("positions", 3, position_id="P-1", side="LONG"))
+    # 排空訂閱者 queue(模擬已被送出的舊資料)。
+    while not sub.queue.empty():
+        sub.queue.get_nowait()
+    assert hub.snapshot({"bars", "pnl", "positions"})  # 清前有東西
+
+    hub.clear()
+
+    # 快照歸零。
+    assert hub.snapshot({"bars", "pnl", "positions"}) == []
+    # backfill 也清空。
+    assert hub.backfill_since(last_seq=0, channels={"bars", "pnl", "positions"}) == []
+    # 訂閱者保留:clear 後 publish 新 run 的信封仍送達。
+    await hub.publish(_env("bars", 1, close="200"))
+    got = await asyncio.wait_for(sub.queue.get(), 1)
+    assert got["data"]["close"] == "200"
+
+
+@pytest.mark.asyncio
 async def test_unsubscribe_stops_delivery():
     """unsubscribe 後不再收到新信封。"""
     hub = Hub()
