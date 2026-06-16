@@ -94,30 +94,48 @@ function onTimeframe(ev: Event) {
 </template>
 
 <style scoped>
+/* 改版 S3:圖表控制列玻璃化(L3)。token 來自 styles/theme.css。
+ * EMA dot 顏色刻意保留(對齊 CandleChart 疊圖線色,非通用漲跌)。 */
 .chart-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 6px 12px;
-  border-bottom: 1px solid #1c2230;
-  background: #0e1117;
+  gap: calc(var(--spacing) * 4);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  border-radius: var(--radius-md);
   flex-wrap: wrap;
+  background: var(--glass-l3-bg);
+  border: 1px solid var(--glass-l1-border);
+  box-shadow: var(--glass-l1-highlight);
+  backdrop-filter: blur(var(--glass-l3-blur)) saturate(var(--glass-l1-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-l3-blur)) saturate(var(--glass-l1-saturate));
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .chart-controls { background: var(--glass-fallback-bg); }
 }
 .ctl {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: #d1d4dc;
+  gap: calc(var(--spacing) * 1.5);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 .ctl select,
 .ctl input[type='number'] {
-  background: #161b22;
-  color: #d1d4dc;
-  border: 1px solid #2a3140;
-  border-radius: 4px;
-  padding: 2px 6px;
+  background: rgba(11, 14, 20, 0.5);
+  color: var(--color-text);
+  border: 1px solid var(--glass-l1-border);
+  border-radius: var(--radius-xs);
+  padding: 3px 7px;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--duration-fast) var(--ease-glass),
+    box-shadow var(--duration-fast) var(--ease-glass);
+}
+.ctl select:focus,
+.ctl input[type='number']:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 .ctl input[type='number'] {
   width: 48px;

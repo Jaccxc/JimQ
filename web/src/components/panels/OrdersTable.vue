@@ -1,32 +1,57 @@
 <script setup lang="ts">
+/**
+ * 改版 S3 — 成交面板玻璃化(L1)。
+ * 換皮:GlassPanel 外框 + shadcn table + tabular-nums + 買賣實心色。
+ * 保留邏輯/store 綁定與 data-testid(fills-table)不變。
+ */
 import { useFillsStore } from '@/stores/fills'
+import { GlassPanel } from '@/components/ui/glass'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableEmpty,
+} from '@/components/ui/table'
 const fills = useFillsStore()
 </script>
 
 <template>
-  <div class="panel">
-    <h3>成交 Fills</h3>
-    <table data-testid="fills-table">
-      <thead>
-        <tr><th>Side</th><th>Qty</th><th>Px</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="(f, i) in fills.fills.slice(-12).reverse()" :key="i">
-          <td :class="f.order_side === 'BUY' ? 'long' : 'short'">{{ f.order_side }}</td>
-          <td>{{ f.last_qty }}</td>
-          <td>{{ f.last_px }}</td>
-        </tr>
-        <tr v-if="fills.fills.length === 0"><td colspan="3" class="empty">無成交</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <GlassPanel class="panel" :padded="false">
+    <h3 class="panel-title">成交 Fills</h3>
+    <Table data-testid="fills-table">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Side</TableHead>
+          <TableHead class="num">Qty</TableHead>
+          <TableHead class="num">Px</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="(f, i) in fills.fills.slice(-12).reverse()" :key="i">
+          <TableCell :class="f.order_side === 'BUY' ? 'long' : 'short'">{{ f.order_side }}</TableCell>
+          <TableCell class="num">{{ f.last_qty }}</TableCell>
+          <TableCell class="num">{{ f.last_px }}</TableCell>
+        </TableRow>
+        <TableEmpty v-if="fills.fills.length === 0" :colspan="3">無成交</TableEmpty>
+      </TableBody>
+    </Table>
+  </GlassPanel>
 </template>
 
 <style scoped>
-.panel { padding: 8px; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #1c2230; }
-.long { color: #26a69a; }
-.short { color: #ef5350; }
-.empty { color: #6b7280; text-align: center; }
+.panel { overflow: hidden; }
+.panel-title {
+  margin: 0;
+  padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: -0.01em;
+}
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.long { color: var(--color-up); font-weight: 600; }
+.short { color: var(--color-down); font-weight: 600; }
 </style>
