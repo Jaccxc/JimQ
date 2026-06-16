@@ -27,13 +27,18 @@ from nautilus_trader.adapters.binance.common.enums import (
     BinanceEnvironment,
     BinanceKeyType,
 )
-from nautilus_trader.adapters.binance.config import BinanceDataClientConfig
+from nautilus_trader.adapters.binance.config import (
+    BinanceDataClientConfig,
+    BinanceExecClientConfig,
+)
 from nautilus_trader.common import Environment
 from nautilus_trader.common.actor import Actor, ActorConfig
 from nautilus_trader.config import (
     ImportableActorConfig,
+    ImportableStrategyConfig,
     InstrumentProviderConfig,
     LiveDataEngineConfig,
+    LiveExecEngineConfig,
     LoggingConfig,
     TradingNodeConfig,
 )
@@ -160,3 +165,156 @@ def credentials_from_env() -> tuple[str, str]:
             "請在 .env.afk 設定(絕不 commit 金鑰)"
         )
     return key, secret
+
+
+# ====================================================================== #
+# 卡 #28 (P2-S2) — Binance testnet **live 交易節點**(data + exec,下 paper 單)
+# ====================================================================== #
+
+# 預設 paper 單規格(小額,假錢):0.001 BTC,SL/TP 寬鬆,確保近期交叉能成交。
+DEFAULT_PAPER_TRADE_SIZE = "0.001"
+# fast/slow EMA 預設(短週期,使近期 1m bar 上更易觸發交叉 → 可驗 round-trip)。
+DEFAULT_FAST_PERIOD = 3
+DEFAULT_SLOW_PERIOD = 8
+
+
+class MainnetBlockedError(RuntimeError):
+    """⛔ 最高優先安全:偵測到非 testnet(mainnet / LIVE / DEMO)交易設定時拋出。"""
+
+
+def assert_testnet_only(environment) -> None:  # noqa: ANN001 — BinanceEnvironment
+    """硬性 testnet-only 閘:任何非 ``BinanceEnvironment.TESTNET`` 一律拒絕。
+
+    ⛔ 本卡只在 Binance USDT-M Futures **testnet**(假錢)下單。對 LIVE(真盤
+    mainnet)/ DEMO 一律拋 ``MainnetBlockedError``,程式硬性阻擋真錢交易。
+    """
+    from nautilus_trader.adapters.binance.common.enums import BinanceEnvironment
+
+    if environment != BinanceEnvironment.TESTNET:
+        raise MainnetBlockedError(
+            "⛔ 阻擋非 testnet 交易設定:本卡硬性 testnet-only(假錢),"
+            f"拒絕 environment={environment!r}(僅允許 BinanceEnvironment.TESTNET)。"
+            "嚴禁 mainnet / 真實資金。"
+        )
+
+
+def binance_testnet_exec_client_config(
+    *, api_key: str, api_secret: str
+) -> BinanceExecClientConfig:
+    """Binance USDT-M Futures **testnet** exec client 設定(HMAC 金鑰)。
+
+    ⛔ 硬性 ``BinanceEnvironment.TESTNET``;金鑰由參數注入(實務從 env 讀),
+    不硬編、不 commit。本 client 負責把 paper 單送達 testnet 並回報成交/部位。
+    """
+    from nautilus_trader.adapters.binance.common.enums import BinanceEnvironment
+
+    return BinanceExecClientConfig(
+        api_key=api_key,
+        api_secret=api_secret,
+        key_type=BinanceKeyType.HMAC,
+        account_type=BinanceAccountType.USDT_FUTURES,
+        environment=BinanceEnvironment.TESTNET,  # ⛔ 永遠 testnet
+        instrument_provider=InstrumentProviderConfig(load_all=True),
+        use_reduce_only=True,
+    )
+
+
+def ema_cross_strategy_config(
+    *,
+    bar_spec: str = DEFAULT_BAR_SPEC,
+    trade_size: str = DEFAULT_PAPER_TRADE_SIZE,
+    fast_period: int = DEFAULT_FAST_PERIOD,
+    slow_period: int = DEFAULT_SLOW_PERIOD,
+    use_bracket: bool = False,
+) -> ImportableStrategyConfig:
+    """ema_cross 策略的 ImportableStrategyConfig(與 backtest 共用同碼)。
+
+    只換 adapter/設定(live testnet vs backtest catalog),策略邏輯不變 →
+    research↔live parity。小額 paper 單(0.001 BTC),短 EMA 週期使近期 1m
+    bar 上更易觸發交叉,利 round-trip 驗證。
+
+    ``use_bracket=False``(live 預設):下純 MARKET 進場單。Binance USDT-M Futures
+    adapter 不支援 bracket 的 OCO 條件單(本地 RiskEngine 會 OrderDenied
+    ``UNSUPPORTED_OCO_CONDITIONAL_ORDERS``,單根本送不到 venue),故 live testnet
+    路徑用純市價單才能真送達成交完成 round-trip。交叉偵測邏輯與 backtest 共用 → parity。
+    """
+    bar_type = f"{BTCUSDT_PERP_BINANCE_ID}-{bar_spec}"
+    return ImportableStrategyConfig(
+        strategy_path="jimq_engine.strategies.ema_cross:EMACross",
+        config_path="jimq_engine.strategies.ema_cross:EMACrossConfig",
+        config={
+            "instrument_id": str(BTCUSDT_PERP_BINANCE_ID),
+            "bar_type": bar_type,
+            "fast_period": fast_period,
+            "slow_period": slow_period,
+            "trade_size": trade_size,
+            "use_bracket": use_bracket,
+        },
+    )
+
+
+def build_live_trade_node_config(
+    *,
+    api_key: str,
+    api_secret: str,
+    bar_spec: str = DEFAULT_BAR_SPEC,
+    trade_size: str = DEFAULT_PAPER_TRADE_SIZE,
+    fast_period: int = DEFAULT_FAST_PERIOD,
+    slow_period: int = DEFAULT_SLOW_PERIOD,
+    redis_host: str = "localhost",
+    redis_port: int = 6379,
+    trader_id: str = LIVE_TRADER_ID,
+    environment=None,  # noqa: ANN001 — BinanceEnvironment;預設 TESTNET
+    reconciliation: bool = True,
+    use_bracket: bool = False,
+) -> TradingNodeConfig:
+    """組裝 **live 交易節點** ``TradingNodeConfig``(Binance testnet;下 paper 單)。
+
+    與 #27 data-only 不同:本卡同時掛 **data + exec** client(testnet /
+    USDT_FUTURES / HMAC),並掛 ema_cross 策略下小額 paper 單。
+
+    - environment = LIVE(走 live engine + adapter)。
+    - data client + exec client 皆 BINANCE testnet。
+    - LiveExecEngineConfig 開 reconciliation(重啟對帳)。
+    - message_bus = #5 streaming(Redis Streams DB0):訂單/成交/部位/PnL 事件
+      落地 Redis → consumer → WS → Live 頁面板顯示真 live 值。
+    - ⛔ ``assert_testnet_only`` 硬性阻擋非 testnet(真錢 mainnet)。
+    """
+    from nautilus_trader.adapters.binance.common.enums import BinanceEnvironment
+
+    if environment is None:
+        environment = BinanceEnvironment.TESTNET
+    # ⛔ 最高優先安全:非 testnet 一律拒絕(硬性阻擋真錢)。
+    assert_testnet_only(environment)
+
+    data_cfg = binance_testnet_data_client_config(
+        api_key=api_key, api_secret=api_secret
+    )
+    exec_cfg = binance_testnet_exec_client_config(
+        api_key=api_key, api_secret=api_secret
+    )
+    # 雙重保險:再次確認組出的 client 確為 testnet。
+    assert_testnet_only(data_cfg.environment)
+    assert_testnet_only(exec_cfg.environment)
+
+    return TradingNodeConfig(
+        trader_id=trader_id,
+        environment=Environment.LIVE,
+        logging=LoggingConfig(log_level="INFO"),
+        message_bus=streaming_message_bus_config(
+            host=redis_host, port=redis_port
+        ),
+        data_engine=LiveDataEngineConfig(),
+        exec_engine=LiveExecEngineConfig(reconciliation=reconciliation),
+        data_clients={str(BINANCE): data_cfg},
+        exec_clients={str(BINANCE): exec_cfg},
+        strategies=[
+            ema_cross_strategy_config(
+                bar_spec=bar_spec,
+                trade_size=trade_size,
+                fast_period=fast_period,
+                slow_period=slow_period,
+                use_bracket=use_bracket,
+            ),
+        ],
+    )

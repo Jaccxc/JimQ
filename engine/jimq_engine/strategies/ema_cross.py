@@ -34,6 +34,11 @@ class EMACrossConfig(StrategyConfig, frozen=True):
     - ``fast_period`` / ``slow_period``:兩條 EMA 週期(fast < slow)。
     - ``trade_size``:每次進場數量(以 base 幣計,符合 size_precision)。
     - ``sl_pct`` / ``tp_pct``:停損 / 停利距進場價的百分比(小數,如 0.01 = 1%)。
+    - ``use_bracket``:True(預設,backtest)用 bracket(OTO MARKET + SL/TP OCO);
+      False(live testnet)只下純 MARKET 進場單。Binance USDT-M Futures adapter
+      不支援 bracket 的 OCO 條件單(本地 RiskEngine 會 OrderDenied
+      ``UNSUPPORTED_OCO_CONDITIONAL_ORDERS``),故 live 路徑改純市價單才能真送達
+      venue 成交。交叉偵測邏輯兩路徑共用 → research↔live parity。
     """
 
     instrument_id: InstrumentId
@@ -43,6 +48,7 @@ class EMACrossConfig(StrategyConfig, frozen=True):
     trade_size: Decimal = Decimal("0.100")
     sl_pct: Decimal = Decimal("0.01")
     tp_pct: Decimal = Decimal("0.02")
+    use_bracket: bool = True
 
 
 class EMACross(Strategy):
@@ -104,11 +110,29 @@ class EMACross(Strategy):
     # ------------------------------------------------------------------ #
     def _on_golden_cross(self, ref_price: float) -> None:
         self._close_open_position()
-        self._enter_bracket(OrderSide.BUY, ref_price)
+        self._enter(OrderSide.BUY, ref_price)
 
     def _on_death_cross(self, ref_price: float) -> None:
         self._close_open_position()
-        self._enter_bracket(OrderSide.SELL, ref_price)
+        self._enter(OrderSide.SELL, ref_price)
+
+    def _enter(self, side: OrderSide, ref_price: float) -> None:
+        """進場:依 ``use_bracket`` 選 bracket(backtest)或純 MARKET(live testnet)。"""
+        if self.config.use_bracket:
+            self._enter_bracket(side, ref_price)
+        else:
+            self._enter_market(side)
+
+    def _enter_market(self, side: OrderSide) -> None:
+        """純 MARKET 進場單(Binance USDT-M Futures testnet 可送達成交;無 OCO)。"""
+        quantity = Quantity(self.config.trade_size, self.instrument.size_precision)
+        order = self.order_factory.market(
+            instrument_id=self.config.instrument_id,
+            order_side=side,
+            quantity=quantity,
+            time_in_force=TimeInForce.GTC,
+        )
+        self.submit_order(order)
 
     def _close_open_position(self) -> None:
         """若當前 instrument 有淨部位則平倉(反向交叉出場)。"""

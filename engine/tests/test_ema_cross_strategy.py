@@ -97,6 +97,41 @@ def test_golden_cross_opens_position():
     engine.dispose()
 
 
+def test_golden_cross_market_only_when_bracket_disabled():
+    """use_bracket=False:交叉只下單純 MARKET 進場(無 OCO 條件子單)。
+
+    Binance USDT-M Futures adapter 不支援 bracket 的 OCO 條件單
+    (本地 RiskEngine 直接 OrderDenied UNSUPPORTED_OCO_CONDITIONAL_ORDERS),
+    故 live testnet 路徑改下純 MARKET 單 → 可真正送達 venue 成交(round-trip)。
+    策略邏輯(交叉偵測)與 backtest 完全共用,只切換下單型態 → parity。
+    """
+    instrument = btcusdt_perp_binance()
+    bars = _make_bars(_golden_cross_prices(), instrument)
+    cfg = EMACrossConfig(
+        instrument_id=BTCUSDT_PERP_BINANCE_ID,
+        bar_type=BAR_TYPE_1M,
+        fast_period=3,
+        slow_period=8,
+        trade_size=Decimal("0.100"),
+        use_bracket=False,
+    )
+    engine = build_engine(instrument, bars, cfg)
+
+    orders = engine.cache.orders()
+    assert orders, "交叉應下進場單"
+    order_types = {o.order_type for o in orders}
+    # 只允許 MARKET 型態 —— 不得有 OCO 條件子單(STOP_MARKET / LIMIT)。
+    assert OrderType.MARKET in order_types
+    assert OrderType.STOP_MARKET not in order_types, "純市價單路徑不應有 STOP_MARKET"
+    assert OrderType.LIMIT not in order_types, "純市價單路徑不應有 LIMIT 子單"
+
+    positions = engine.cache.positions()
+    assert len(positions) >= 1, "市價進場成交後應開出部位(round-trip 起點)"
+    assert any(p.entry == OrderSide.BUY for p in positions)
+
+    engine.dispose()
+
+
 def test_no_cross_no_orders():
     """單調序列(無交叉)不應下任何單。"""
     instrument = btcusdt_perp_binance()
