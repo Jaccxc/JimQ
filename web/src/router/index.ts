@@ -19,6 +19,12 @@ export const router = createRouter({
       name: 'research',
       component: () => import('@/views/ResearchView.vue'),
     },
+    // 改版 S1b:設計系統元件預覽(供視覺驗收;不影響既有頁面)。
+    {
+      path: '/ui-preview',
+      name: 'ui-preview',
+      component: () => import('@/views/UiPreviewView.vue'),
+    },
   ],
 })
 
