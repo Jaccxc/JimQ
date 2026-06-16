@@ -48,3 +48,29 @@ class BacktestRunRead(BacktestRunBase):
     final_balance: Decimal | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+
+class BacktestRunRequest(BaseModel):
+    """卡 #20 (W1) — 從 UI launcher 觸發一次 backtest 的請求 body。
+
+    刻意只收使用者層欄位(symbol/timeframe/strategy/params/start/end);
+    bar_type 由 symbol+timeframe 在伺服端推導,status/id/correlation_id 由
+    伺服端產生。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: Annotated[str, Field(min_length=1, max_length=64, examples=["BTCUSDT-PERP.BINANCE"])]
+    timeframe: Annotated[str, Field(min_length=1, max_length=32, examples=["1m"])]
+    strategy: Annotated[str, Field(min_length=1, max_length=128, examples=["ema_cross"])]
+    params: dict[str, Any] = Field(default_factory=dict)
+    start: datetime
+    end: datetime
+
+
+class BacktestRunAccepted(BaseModel):
+    """POST /backtests/run 的回應:run 已建立(PENDING)、命令已發布。"""
+
+    run_id: int
+    correlation_id: str
+    status: BacktestStatus
