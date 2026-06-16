@@ -90,7 +90,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_CACHE_DB: 1
-      # @latest:從 bus DB0 的 jimq:latest_stream_key 讀 engine 最近一次 backtest 的 key。
+      # @latest(卡 A 雙 scope):api 起 live + backtest 兩條 supervisor,各從 bus
+      # DB0 的 jimq:live:latest_stream_key / jimq:backtest:latest_stream_key 讀對應
+      # engine 最近一次寫入的 key,各自 hub 並行消費(Live 不混入 backtest)。
       JIMQ_STREAM_KEY: "@latest"
       JIMQ_CATALOG_PATH: /data/catalog
       ENVIRONMENT: local
