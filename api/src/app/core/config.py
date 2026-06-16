@@ -70,6 +70,14 @@ class ModelStoreSettings(BaseSettings):
     )
 
 
+class MlflowSettings(BaseSettings):
+    # MLflow tracking server base URL for the read-only proxy endpoints (卡 #23 W4).
+    # api talks to MLflow over its REST API (``/api/2.0/mlflow/...``) — it never
+    # imports the ``mlflow`` package (stays lean; research stays a separate venv).
+    # Default points at the docker ``--profile research`` service on localhost.
+    MLFLOW_TRACKING_URI: str = config("MLFLOW_TRACKING_URI", default="http://localhost:5000")
+
+
 class EnvironmentOption(Enum):
     LOCAL = "local"
     STAGING = "staging"
@@ -86,6 +94,7 @@ class Settings(
     RedisCacheSettings,
     ClientSideCacheSettings,
     ModelStoreSettings,
+    MlflowSettings,
     EnvironmentSettings,
 ):
     pass
