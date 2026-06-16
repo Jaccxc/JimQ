@@ -92,3 +92,63 @@ export function orderToPriceLines(order: OrderInitializedData): PriceLineSpec[] 
   }
   return lines
 }
+
+// --- 卡 #21 (W2):persisted trade(GET /backtests/{id}/trades 的列)映射 --------
+//
+// 重載歷史 backtest 的進出場時,trade 已是 round-trip(進場 + 出場)的彙整列,
+// 非逐筆 fill/order 事件。故 trade → 兩個 marker(進場於 opened_at、出場於
+// closed_at)+ SL/TP priceLine(若有 bracket)。time 由 ISO-8601 → epoch 秒。
+
+/** ISO-8601 datetime 字串 → epoch 秒(LWC UTCTimestamp)。 */
+function isoToSec(iso: string): number {
+  return Math.floor(new Date(iso).getTime() / 1000)
+}
+
+/**
+ * persisted trade → 進場 + 出場 marker。
+ * LONG:進場向上箭頭(belowBar)、出場向下箭頭(aboveBar);SHORT 相反。
+ */
+export function tradeToMarkers(trade: import('@/api/trades').TradeRecord): MarkerSpec[] {
+  const isLong = trade.side === 'LONG'
+  const entry: MarkerSpec = {
+    time: isoToSec(trade.opened_at),
+    position: isLong ? 'belowBar' : 'aboveBar',
+    shape: isLong ? 'arrowUp' : 'arrowDown',
+    color: isLong ? BUY_COLOR : SELL_COLOR,
+    text: `${trade.side} ${trade.quantity} @ ${trade.entry_price}`,
+  }
+  const exit: MarkerSpec = {
+    time: isoToSec(trade.closed_at),
+    position: isLong ? 'aboveBar' : 'belowBar',
+    shape: isLong ? 'arrowDown' : 'arrowUp',
+    color: isLong ? SELL_COLOR : BUY_COLOR,
+    text: `EXIT @ ${trade.exit_price}${trade.pnl != null ? ` (PnL ${trade.pnl})` : ''}`,
+  }
+  return [entry, exit]
+}
+
+/** persisted trade → SL/TP priceLine(欄位為 null 時不產生對應線)。 */
+export function tradeToPriceLines(
+  trade: import('@/api/trades').TradeRecord,
+): PriceLineSpec[] {
+  const lines: PriceLineSpec[] = []
+  if (trade.sl != null) {
+    lines.push({
+      id: `trade-${trade.id}:SL`,
+      kind: 'SL',
+      price: Number(trade.sl),
+      color: SL_COLOR,
+      title: `SL ${trade.sl}`,
+    })
+  }
+  if (trade.tp != null) {
+    lines.push({
+      id: `trade-${trade.id}:TP`,
+      kind: 'TP',
+      price: Number(trade.tp),
+      color: TP_COLOR,
+      title: `TP ${trade.tp}`,
+    })
+  }
+  return lines
+}

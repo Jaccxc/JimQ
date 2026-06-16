@@ -29,6 +29,7 @@ from jimq_core.constants import REDIS_BUS_DB
 
 from jimq_engine.catalog.ingest import open_catalog
 from jimq_engine.control.status_writer import StatusWriter, backtest_run_db_url
+from jimq_engine.control.trade_writer import TradeWriter
 from jimq_engine.control.worker import run_command_worker
 
 
@@ -51,6 +52,7 @@ async def _main() -> None:
     )
     sync_redis = redis_sync.Redis(host=host, port=port, db=REDIS_BUS_DB)
     writer = StatusWriter(backtest_run_db_url())
+    trade_writer = TradeWriter(backtest_run_db_url())  # 卡 #21:成交持久化
     catalog = open_catalog()
 
     stop = asyncio.Event()
@@ -64,11 +66,13 @@ async def _main() -> None:
             redis_host=host,
             redis_port=port,
             stop_event=stop,
+            trade_writer=trade_writer,
         )
     finally:
         await aredis.aclose()
         sync_redis.close()
         await writer.aclose()
+        await trade_writer.aclose()
 
 
 if __name__ == "__main__":

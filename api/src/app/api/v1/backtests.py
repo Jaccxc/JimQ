@@ -22,6 +22,7 @@ from jimq_core.timeframes import bar_type_for
 
 from ...core.db.database import async_get_db
 from ...crud.crud_backtest_run import crud_backtest_runs
+from ...crud.crud_backtest_trade import crud_backtest_trades
 from ...models.backtest_run import BacktestRun, BacktestStatus
 from ...schemas.backtest_run import (
     BacktestRunAccepted,
@@ -30,6 +31,7 @@ from ...schemas.backtest_run import (
     BacktestRunRequest,
     BacktestRunUpdate,
 )
+from ...schemas.backtest_trade import BacktestTradeRead
 from ...services.command_publisher import build_run_backtest_command, publish_command
 from ...ws.app_factory import bus_redis_url
 
@@ -124,6 +126,31 @@ async def run_backtest(
         correlation_id=command.correlation_id,
         status=BacktestStatus.PENDING,
     )
+
+
+@run_router.get(
+    "/{backtest_id}/trades",
+    response_model=list[BacktestTradeRead],
+    summary="某 backtest run 的成交(進出場/SL/TP/PnL),依 opened_at 排序",
+)
+async def get_backtest_trades(
+    backtest_id: int,
+    db: AsyncSession = Depends(async_get_db),
+) -> list[BacktestTradeRead]:
+    """回某 run_id 的成交列表(無 FK;以 run_id 索引欄查;鐵律 12)。
+
+    依 ``opened_at`` 升冪排序,供前端依序畫進出場 marker / SL/TP。
+    """
+    result = await crud_backtest_trades.get_multi(
+        db,
+        run_id=backtest_id,
+        schema_to_select=BacktestTradeRead,
+        return_as_model=True,
+        sort_columns=["opened_at"],
+        sort_orders=["asc"],
+        limit=None,
+    )
+    return result["data"]
 
 
 router.include_router(run_router)
