@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "vue-tsc --noEmit",
-    "verify:headless": "node scripts/verify-headless.mjs"
+    "verify:headless": "node scripts/verify-headless.mjs",
+    "verify:research": "node scripts/verify-research-headless.mjs"
   },
   "dependencies": {
     "lightweight-charts": "^5.0.0",

@@ -19,6 +19,8 @@ dependencies = [
     "redis>=5.0",
     "fastcrud>=0.15.5",
     "uuid6>=2024.1.12",
+    # 卡 #23 (W4):MLflow 讀取 proxy 端點經 HTTP 連 MLflow REST(不 import mlflow)。
+    "httpx>=0.27",
 ]
 
 [dependency-groups]

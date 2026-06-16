@@ -21,7 +21,10 @@ from typing import TYPE_CHECKING, Any, Literal, Mapping
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from jimq_core.constants import COMMAND_TYPE_RUN_BACKTEST
+from jimq_core.constants import (
+    COMMAND_TYPE_BUILD_DATASET,
+    COMMAND_TYPE_RUN_BACKTEST,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - 僅供型別檢查,執行期不匯入 nautilus
     from nautilus_trader.model.data import Bar
@@ -156,3 +159,28 @@ class RunBacktestCommand(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     start: datetime
     end: datetime
+
+
+class ResearchJobCommand(BaseModel):
+    """研究 job 命令信封(卡 #23 W4;命令平面共用契約)。
+
+    web 觸發的 dataset build / 模型訓練 job 同走命令平面:api(發布端)建
+    ``research_job`` 列(PENDING)後把此信封 JSON XADD 到 ``COMMAND_STREAM_KEY``;
+    research worker(獨立 venv)可 XREADGROUP 消費並回寫狀態。api 不 import
+    research —— 兩端僅經此信封解耦。
+
+    - ``command_type``:``BUILD_DATASET`` 或 ``TRAIN``(列舉欄位慣例,大寫字面值)。
+    - ``correlation_id``:端到端追蹤 id(請求 → 命令 → job),供審計。
+    - ``job_id``:api 預建的 ``research_job`` 列 id(worker 據此回寫狀態流轉)。
+    - ``params``:本質非結構化的 job 參數 payload(如 symbol/timeframe/特徵設定/
+      訓練超參)。
+
+    純 Pydantic(無 nautilus / redis / sqlalchemy 依賴),api 與 research 共用。
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    command_type: str = COMMAND_TYPE_BUILD_DATASET
+    correlation_id: str
+    job_id: int
+    params: dict[str, Any] = Field(default_factory=dict)

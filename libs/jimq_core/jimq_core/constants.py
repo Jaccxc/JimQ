@@ -22,5 +22,12 @@ COMMAND_STREAM_KEY: str = "jimq:commands"
 # run_backtest 命令的 ``command_type`` 契約字面值(大寫,對齊列舉欄位慣例)。
 COMMAND_TYPE_RUN_BACKTEST: str = "RUN_BACKTEST"
 
+# --- 研究 job 命令(卡 #23 W4)----------------------------------------------
+# 從 web 觸發的研究 job(dataset build / 模型訓練)同走命令平面:api 建
+# ``research_job`` 列(PENDING)+ XADD 命令信封到 ``COMMAND_STREAM_KEY``;research
+# worker(獨立 venv)可 XREADGROUP 消費並回寫狀態。命令種類契約字面值(大寫):
+COMMAND_TYPE_BUILD_DATASET: str = "BUILD_DATASET"
+COMMAND_TYPE_TRAIN: str = "TRAIN"
+
 # command worker 的 Redis consumer group(多 worker 時 consumer 名可帶 pid)。
 COMMAND_CONSUMER_GROUP: str = "jimq-engine"
