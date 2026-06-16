@@ -39,20 +39,21 @@ describe('tradeToMarkers', () => {
     expect(m).toHaveLength(2)
   })
 
-  it('LONG:進場向上箭頭(belowBar)於 opened_at,出場向下箭頭(aboveBar)於 closed_at', () => {
+  it('LONG:進場向上箭頭(belowBar)於 opened_at,出場 circle(aboveBar)於 closed_at', () => {
+    // 卡 D:出場改用非箭頭形狀(circle)與進場箭頭視覺區分;進場時間/位置不變。
     const [entry, exit] = tradeToMarkers(LONG_TRADE)
     expect(entry.shape).toBe('arrowUp')
     expect(entry.position).toBe('belowBar')
     expect(entry.time).toBe(1704067200)
-    expect(exit.shape).toBe('arrowDown')
+    expect(exit.shape).toBe('circle')
     expect(exit.position).toBe('aboveBar')
     expect(exit.time).toBe(1704070800)
   })
 
-  it('SHORT:進場向下箭頭,出場向上箭頭', () => {
+  it('SHORT:進場向下箭頭,出場 circle(非箭頭,卡 D 視覺區分)', () => {
     const [entry, exit] = tradeToMarkers(SHORT_NO_BRACKET)
     expect(entry.shape).toBe('arrowDown')
-    expect(exit.shape).toBe('arrowUp')
+    expect(exit.shape).toBe('circle')
   })
 
   it('進場 marker 文字含方向與進場價', () => {
