@@ -16,6 +16,7 @@
 import {
   createChart,
   CandlestickSeries,
+  LineSeries,
   createSeriesMarkers,
   LineStyle,
   type IChartApi,
@@ -23,12 +24,38 @@ import {
   type ISeriesMarkersPluginApi,
   type IPriceLine,
   type CandlestickData,
+  type LineData,
   type SeriesMarker,
   type UTCTimestamp,
   type Time,
 } from 'lightweight-charts'
 import type { BarDTO } from '@/types/contract'
+import type { LinePoint } from '@/lib/ema'
 import type { MarkerSpec, PriceLineSpec } from '@/lib/tradeMapping'
+
+/**
+ * 可注入相依(測試用 fake LWC API)。預設綁真實 lightweight-charts。
+ * 對齊 LWC v5:createChart、series 定義(addSeries(def))、createSeriesMarkers。
+ */
+export interface ChartDeps {
+  createChart: typeof createChart
+  candlestickSeriesDef: unknown
+  lineSeriesDef: unknown
+  createSeriesMarkers: typeof createSeriesMarkers
+}
+
+const DEFAULT_DEPS: ChartDeps = {
+  createChart,
+  candlestickSeriesDef: CandlestickSeries,
+  lineSeriesDef: LineSeries,
+  createSeriesMarkers,
+}
+
+/** EMA line series 預設顏色(fast 偏藍、slow 偏橘)。 */
+const EMA_COLORS: Record<string, string> = {
+  fast: '#42a5f5',
+  slow: '#ffa726',
+}
 
 function toCandle(b: BarDTO): CandlestickData<Time> {
   return {
@@ -57,9 +84,13 @@ export class ChartController {
   private markers: SeriesMarker<Time>[] = []
   /** priceLine id → handle,便於去重/移除。 */
   private priceLines = new Map<string, IPriceLine>()
+  /** EMA line series:id(fast/slow)→ series handle,重用避免重複建。 */
+  private emaLines = new Map<string, ISeriesApi<'Line'>>()
+  private deps: ChartDeps
 
-  constructor(container: HTMLElement) {
-    this.chart = createChart(container, {
+  constructor(container: HTMLElement, deps: ChartDeps = DEFAULT_DEPS) {
+    this.deps = deps
+    this.chart = deps.createChart(container, {
       layout: {
         background: { color: '#0e1117' },
         textColor: '#d1d4dc',
@@ -73,14 +104,43 @@ export class ChartController {
       autoSize: true,
       timeScale: { timeVisible: true, secondsVisible: false },
     })
-    this.series = this.chart.addSeries(CandlestickSeries, {
+    this.series = this.chart.addSeries(deps.candlestickSeriesDef as never, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       wickUpColor: '#26a69a',
       wickDownColor: '#ef5350',
       borderVisible: false,
     })
-    this.markersApi = createSeriesMarkers(this.series, [])
+    this.markersApi = deps.createSeriesMarkers(this.series, [])
+  }
+
+  /**
+   * 疊加 / 更新 EMA line series(id 為 'fast'/'slow' 等)。
+   * 首次建立 line series;之後同 id 重用同一 series 命令式 setData,
+   * 避免重複建 series 造成記憶體洩漏。
+   */
+  setEmaLine(id: string, points: LinePoint[]): void {
+    let line = this.emaLines.get(id)
+    if (!line) {
+      line = this.chart.addSeries(this.deps.lineSeriesDef as never, {
+        color: EMA_COLORS[id] ?? '#b0bec5',
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      }) as ISeriesApi<'Line'>
+      this.emaLines.set(id, line)
+    }
+    line.setData(points as unknown as LineData<Time>[])
+  }
+
+  /** 移除指定 EMA line series(關閉疊圖時)。 */
+  removeEmaLine(id: string): void {
+    const line = this.emaLines.get(id)
+    if (line) {
+      this.chart.removeSeries(line)
+      this.emaLines.delete(id)
+    }
   }
 
   /** REST 歷史:整批設定。 */
@@ -129,6 +189,22 @@ export class ChartController {
 
   clearPriceLines(): void {
     for (const id of [...this.priceLines.keys()]) this.removePriceLine(id)
+  }
+
+  /**
+   * 切換標的 / 週期時的命令式重置:清 candlestick 資料、所有 EMA line、
+   * markers、priceLines,但**不重建 chart**(重用 chart 實例避免閃爍/洩漏)。
+   * reset 後可重新 setHistory + setEmaLine。
+   */
+  reset(): void {
+    // EMA line series 全移除。
+    for (const id of [...this.emaLines.keys()]) this.removeEmaLine(id)
+    // priceLines 全移除。
+    this.clearPriceLines()
+    // markers 清空。
+    this.setMarkers([])
+    // candlestick 清空(reset 後重 setHistory)。
+    this.series.setData([])
   }
 
   destroy(): void {
