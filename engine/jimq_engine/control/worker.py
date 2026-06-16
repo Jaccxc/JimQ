@@ -211,9 +211,13 @@ async def handle_run_backtest(
         metrics = _extract_metrics(engine)
 
         # 卡 #21:抽成交並持久化(dispose 前;cache 仍可讀)。失敗不擋 run 完成。
+        # NETTING 下 positions_closed() 常為空 → 改以抽出的 round-trip 成交筆數
+        # 校正 num_trades(與持久化的 backtest_trade 一致;避免 UI 顯示 0)。
         if trade_writer is not None:
             try:
                 trades = extract_trades(engine, run_id=command.run_id)
+                if trades:
+                    metrics["num_trades"] = len(trades)
                 written = await trade_writer.write_trades(trades)
                 logger.info("run %s 成交持久化:%s 筆", command.run_id, written)
             except Exception:  # noqa: BLE001
