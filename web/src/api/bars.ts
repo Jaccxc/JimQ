@@ -30,6 +30,41 @@ export async function fetchBars(params: FetchBarsParams): Promise<BarDTO[]> {
 }
 
 /**
+ * Catalog 資料區間 client(對齊 GET /api/v1/bars/range)。
+ *
+ * 回某 symbol+timeframe 在 catalog 的實際 {start,end,count}(bar ts_init 奈秒;
+ * 空則 start/end=null、count=0)。launcher 掛載時用來動態填**有資料的**預設日期。
+ * fetch 可注入(測試決定論)。
+ */
+export interface FetchBarRangeParams {
+  symbol: string
+  timeframe: string
+  /** base path 覆寫(預設同源 /api/v1)。 */
+  baseUrl?: string
+}
+
+export interface BarRange {
+  start: number | null
+  end: number | null
+  count: number
+}
+
+export async function fetchBarRange(
+  params: FetchBarRangeParams,
+  fetchImpl: typeof fetch = fetch,
+): Promise<BarRange> {
+  const base = params.baseUrl ?? '/api/v1'
+  const q = new URLSearchParams()
+  q.set('symbol', params.symbol)
+  q.set('timeframe', params.timeframe)
+  const res = await fetchImpl(`${base}/bars/range?${q.toString()}`)
+  if (!res.ok) {
+    throw new Error(`fetchBarRange ${res.status} ${res.statusText}`)
+  }
+  return (await res.json()) as BarRange
+}
+
+/**
  * Live 頁近期真 klines client(對齊 #30 GET /api/v1/live/bars)。
  *
  * 後端從 Binance testnet 期貨公開 klines 取最近 ``limit`` 根 → BarDTO[](與 live
