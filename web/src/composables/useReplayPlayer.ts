@@ -175,11 +175,14 @@ export function useReplayPlayer(sink: ReplaySink) {
     if (playing.value) rebase()
   }
 
-  /** 拖動進度條:設 index(可往回 → reset 重建;往前 → 補畫)。 */
+  /** 拖動進度條:設 index(可往回 → reset 重建;往前 → 補畫)。
+   *  scrub 是刻意的跳轉 → 一律 fit,讓使用者看到已長出的整段(往前補畫時
+   *  LWC 預設停在最新幾根,不 fit 會像只長 2 根;goTo 的往回重建已含 fit)。 */
   function scrub(index: number): void {
     const wasPlaying = playing.value
     pause()
     goTo(index)
+    sink.fit()
     if (wasPlaying && currentIndex.value < total.value - 1) play()
   }
 
