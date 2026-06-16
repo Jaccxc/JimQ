@@ -42,6 +42,32 @@ def test_script_run_writes_and_queryable(tmp_path, monkeypatch):
     assert len(query_funding(catalog)) == 1
 
 
+def test_script_ingests_eth_symbol_with_eth_bar_type(tmp_path, monkeypatch):
+    """卡 #22:--symbol ETHUSDT-PERP.BINANCE 用 ETH instrument + ETH bar type 寫入。"""
+    from nautilus_trader.model.data import BarType
+
+    from jimq_engine.catalog.ingest import query_bars as q
+
+    monkeypatch.setattr(script, "BinanceFuturesREST", FakeClient)
+    catalog_path = str(tmp_path / "catalog")
+    args = script.parse_args(
+        [
+            "--start", "2023-11-14", "--end", "2023-11-15",
+            "--intervals", "1m", "--symbol", "ETHUSDT-PERP.BINANCE",
+            "--catalog", catalog_path,
+        ]
+    )
+    assert script.run(args) == 0
+
+    catalog = open_catalog(catalog_path)
+    eth_bt = BarType.from_str("ETHUSDT-PERP.BINANCE-1-MINUTE-LAST-EXTERNAL")
+    eth_bars = q(catalog, bar_type=eth_bt)
+    assert len(eth_bars) == 2
+    # BTC bar type 不應有資料(未灌)。
+    btc_bt = BarType.from_str("BTCUSDT-PERP.BINANCE-1-MINUTE-LAST-EXTERNAL")
+    assert len(q(catalog, bar_type=btc_bt)) == 0
+
+
 def test_script_idempotent_second_run(tmp_path, monkeypatch):
     monkeypatch.setattr(script, "BinanceFuturesREST", FakeClient)
     catalog_path = str(tmp_path / "catalog")
