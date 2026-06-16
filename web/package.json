@@ -19,17 +19,24 @@
     "verify:research": "node scripts/verify-research-headless.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "lightweight-charts": "^5.0.0",
     "pinia": "^2.2.0",
+    "reka-ui": "^2.9.10",
+    "tailwind-merge": "^3.6.0",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
+    "@tailwindcss/vite": "^4.3.1",
     "@vitejs/plugin-vue": "^5.1.0",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^25.0.0",
     "playwright": "^1.61.0",
+    "tailwindcss": "^4.3.1",
     "typescript": "~5.5.0",
     "vite": "^5.4.0",
     "vitest": "^2.1.0",
