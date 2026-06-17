@@ -72,6 +72,18 @@ function toCandle(b: BarDTO): CandlestickData<Time> {
   }
 }
 
+/**
+ * 預設視窗常數(問題3):進圖/回放開頭即維持「至少 ~70 根 bar 寬 + 右側 ~20% 空白」。
+ *
+ * 用 timeScale().setVisibleLogicalRange({ from, to }):logical index 以 0 為第一根。
+ * - 視窗寬 = ``DEFAULT_WINDOW_BARS`` 根。
+ * - 右側留白 = 視窗寬 × ``RIGHT_BLANK_FRACTION``(~20%)→ 末端 logical 落在
+ *   (lastBarIndex 之後)留白區,即使目前只有 2 根 bar 也小小落在窗左半,不放大。
+ * - 隨回放新增 bar:視窗向右捲動維持窗寬與右側留白(showRightEdge)。
+ */
+const DEFAULT_WINDOW_BARS = 70
+const RIGHT_BLANK_FRACTION = 0.2
+
 function toMarker(m: MarkerSpec): SeriesMarker<Time> {
   return {
     time: m.time as UTCTimestamp,
@@ -96,6 +108,8 @@ export class ChartController {
   /** 已套用的最後一根 bar time(單調守衛:丟棄較舊更新,避免 LWC 拋
    * "Cannot update oldest data";reconnect/切標的重載較舊歷史後由 setHistory 重設)。 */
   private lastBarTime: number | null = null
+  /** 目前 series 上的 bar 數(預設視窗計算用;updateBar append 時 +1)。 */
+  private barCount = 0
   private deps: ChartDeps
 
   constructor(container: HTMLElement, deps: ChartDeps = DEFAULT_DEPS) {
@@ -188,14 +202,34 @@ export class ChartController {
    *  前一標的的價格範圍,如 BTC→ETH 要手動縮放)。 */
   setHistory(bars: BarDTO[]): void {
     this.series.setData(bars.map(toCandle))
-    this.fit()
+    this.barCount = bars.length
+    // 進圖預設窗(問題3):≥70 根 + 右側 ~20% 空白,而非 fitContent 縮到僅有的幾根。
+    this.applyDefaultWindow()
+    // 價格軸仍貼合當前資料(換標的避免 Y 軸卡在前一標的範圍)。
+    this.chart.priceScale('right').applyOptions({ autoScale: true })
     this.lastBarTime = bars.length ? bars[bars.length - 1].time : null
   }
 
-  /** TradingView 式「自動對齊」:fit 時間軸 + 重新開啟價格軸 autoScale。
-   *  供換標的自動呼叫,也供 UI「Auto Fit」按鈕呼叫。手動拖曳/縮放仍可用
-   *  (LWC 預設互動不關閉);手動動過價格軸後 autoScale 會被 LWC 關掉,
-   *  按一下按鈕即重新開啟並貼合資料。 */
+  /**
+   * 預設縮放窗(問題3):時間軸維持「至少 ~70 根 bar 寬的視窗 + 右側 ~20% 空白」。
+   *
+   * 用 logical range:右端 = (最後一根 index)+ 右側留白根數,左端 = 右端 − 窗寬。
+   * 即使目前只有 1~2 根 bar,也是小小地落在這個窗的左半(左右皆有空間),
+   * 而**不是**被 fitContent 放大成 2 根超大蠟燭。隨回放新增 bar(barCount 增加),
+   * 視窗向右捲動維持窗寬與右側留白。手動拖曳/縮放仍可用(僅在進圖/回放推進時呼叫)。
+   */
+  applyDefaultWindow(): void {
+    const blank = DEFAULT_WINDOW_BARS * RIGHT_BLANK_FRACTION
+    const lastIndex = Math.max(this.barCount - 1, 0)
+    const to = lastIndex + blank
+    const from = to - DEFAULT_WINDOW_BARS
+    this.chart.timeScale().setVisibleLogicalRange({ from, to })
+  }
+
+  /** TradingView 式「fit 全部資料」:fit 時間軸 + 重新開啟價格軸 autoScale。
+   *  供 UI「⤢ Fit」按鈕一鍵看全段。手動拖曳/縮放仍可用;手動動過價格軸後
+   *  autoScale 會被 LWC 關掉,按一下按鈕即重新開啟並貼合資料。
+   *  (與 applyDefaultWindow 區分:Fit=看全部;預設窗=進圖/回放的 ~70 根捲動窗。) */
   fit(): void {
     this.chart.timeScale().fitContent()
     // 主圖(蠟燭)在預設右側 price scale;重新開 autoScale 讓 Y 軸貼合當前資料。
@@ -208,7 +242,14 @@ export class ChartController {
    * "Cannot update oldest data")。同 time 允許(重畫進行中的最後一根)。 */
   updateBar(bar: BarDTO): void {
     if (this.lastBarTime !== null && bar.time < this.lastBarTime) return
+    // 新 time = append 一根(barCount +1);同 time = 覆寫最後一根(不增)。
+    const isNewBar = this.lastBarTime === null || bar.time > this.lastBarTime
     this.series.update(toCandle(bar))
+    if (isNewBar) {
+      this.barCount += 1
+      // 回放逐根長出:視窗向右捲動,維持窗寬 + 右側 ~20% 空白(不每根 fitContent 縮)。
+      this.applyDefaultWindow()
+    }
     this.lastBarTime = bar.time
   }
 
@@ -265,8 +306,9 @@ export class ChartController {
     this.setMarkers([])
     // candlestick 清空(reset 後重 setHistory)。
     this.series.setData([])
-    // 單調游標重設(reset 後將由 setHistory 重新建立)。
+    // 單調游標 + bar 計數重設(reset 後將由 setHistory/updateBar 重新建立)。
     this.lastBarTime = null
+    this.barCount = 0
   }
 
   destroy(): void {

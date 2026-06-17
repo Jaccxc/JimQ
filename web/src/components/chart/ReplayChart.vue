@@ -48,6 +48,7 @@ const sink: ReplaySink = {
   clearEquityLine: () => controller?.clearEquityLine(),
   reset: () => controller?.reset(),
   fit: () => controller?.fit(),
+  applyDefaultWindow: () => controller?.applyDefaultWindow(),
 }
 
 const player = useReplayPlayer(sink)

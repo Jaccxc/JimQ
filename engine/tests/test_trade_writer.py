@@ -193,6 +193,49 @@ def test_round_trips_flip_long_to_short_splits_into_two():
     assert Decimal(str(short_t["pnl"])) == Decimal("5.0")  # (120-115)*1 short
 
 
+def test_round_trips_reversal_chain_per_trade_entry_differs_from_exit():
+    """還原 run #94 的 always-in-market 反手鏈:重現使用者「同價卻有 PnL」回報。
+
+    根因:策略持續反手 → 第 N 筆的**出場價 = 第 N+1 筆的進場價**(同一根反手 fill)。
+    那是兩筆不同 trade 的邊界價,**非同一筆**的進出同價。本測試斷言:
+      1. 每一筆 trade 自身的 entry_price ≠ exit_price(除尾段未平倉)。
+      2. 每一筆的 pnl 號與 (exit-entry)×方向 一致(SHORT 進<出 → 負)。
+      3. 相鄰兩筆的「前者 exit = 後者 entry」(這正是使用者看到的「同價」來源)。
+    """
+    # 取 run #94 前三筆的價格鏈:42494.1 → 42542.3 → 42471.7 → 42447.0,持續反手。
+    fills = [
+        _FakeFill(is_buy=False, last_px=42494.1, last_qty=0.1, ts_event=1),  # 開空
+        _FakeFill(is_buy=True, last_px=42542.3, last_qty=0.2, ts_event=2),   # 平空(虧)+反手做多
+        _FakeFill(is_buy=False, last_px=42471.7, last_qty=0.2, ts_event=3),  # 平多(虧)+反手做空
+        _FakeFill(is_buy=True, last_px=42447.0, last_qty=0.1, ts_event=4),   # 平空(賺)歸零
+    ]
+    trips = round_trips_from_fills(fills, instrument_id="BTCUSDT-PERP.BINANCE", run_id=94)
+    assert len(trips) == 3
+
+    for t in trips:
+        entry = Decimal(str(t["entry_price"]))
+        exit_ = Decimal(str(t["exit_price"]))
+        pnl = Decimal(str(t["pnl"]))
+        # (1) 同一筆進出價不同。
+        assert entry != exit_, f"同一筆 entry==exit:{t}"
+        # (2) pnl 號與方向一致。
+        direction = Decimal("1") if t["side"] == "LONG" else Decimal("-1")
+        expected_sign_pnl = (exit_ - entry) * direction
+        assert (pnl > 0) == (expected_sign_pnl > 0)
+        assert (pnl < 0) == (expected_sign_pnl < 0)
+
+    # (3) 相鄰邊界:前者 exit_price == 後者 entry_price(使用者看到的「同價」實為此)。
+    for a, b in zip(trips, trips[1:]):
+        assert Decimal(str(a["exit_price"])) == Decimal(str(b["entry_price"]))
+
+    # 第一筆對齊 DB run #94 第 413 列:SHORT 42494.1→42542.3,pnl ≈ -4.82。
+    first = trips[0]
+    assert first["side"] == "SHORT"
+    assert Decimal(str(first["pnl"])) == (
+        (Decimal("42494.1") - Decimal("42542.3")) * Decimal("0.1")
+    )
+
+
 def test_round_trips_open_tail_position_is_closed_at_last_fill():
     # buy 1 @100,沒有平倉 fill:回測結束仍持倉。仍輸出一筆(exit=最後 fill 價,
     # 標記未實現以最後價估;pnl=0,確保權益曲線不漏掉進場 marker)。

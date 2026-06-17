@@ -47,6 +47,12 @@ function makeFakeChart() {
       removePriceLine: vi.fn(),
     }
   }
+  // 單一 timeScale 物件(跨呼叫穩定),便於斷言 fitContent / setVisibleLogicalRange。
+  const timeScaleApi = {
+    fitContent: vi.fn(),
+    setVisibleLogicalRange: vi.fn(),
+    applyOptions: vi.fn(),
+  }
   const chart = {
     addSeries: vi.fn((def: { _kind?: string }) => {
       const s = mkSeries(def?._kind ?? 'unknown')
@@ -56,12 +62,12 @@ function makeFakeChart() {
     removeSeries: vi.fn((s: FakeSeries) => {
       removedSeries.push(s)
     }),
-    timeScale: () => ({ fitContent: vi.fn() }),
+    timeScale: () => timeScaleApi,
     priceScale: () => ({ applyOptions: vi.fn() }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
   }
-  return { chart, series, removedSeries }
+  return { chart, series, removedSeries, timeScaleApi }
 }
 
 function makeController() {
@@ -166,5 +172,45 @@ describe('ChartController reset(切換標的安全)', () => {
     // reset 移除 1 次,之後重新建立一個新 line。
     expect(fake.series.filter((s) => s.kind === 'line')).toHaveLength(2)
     expect(fake.chart.removeSeries).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ChartController 預設縮放窗(問題3:≥70 根 + 右側 ~20% 空白)', () => {
+  it('setHistory 用 setVisibleLogicalRange(非 fitContent)套預設窗', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(100, 1), bar(160, 2)])
+    expect(fake.timeScaleApi.setVisibleLogicalRange).toHaveBeenCalledTimes(1)
+    // setHistory 不再 blind fitContent(那會把 2 根放大成超大蠟燭)。
+    expect(fake.timeScaleApi.fitContent).not.toHaveBeenCalled()
+  })
+
+  it('視窗至少 70 根寬,且右端在最後一根之後留白(僅 2 根時不放大)', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(100, 1), bar(160, 2)]) // 只有 2 根
+    const { from, to } = fake.timeScaleApi.setVisibleLogicalRange.mock.calls[0][0]
+    // 窗寬 ≥ 70 根。
+    expect(to - from).toBeGreaterThanOrEqual(70)
+    // 右側留白:右端超過最後一根(index 1),約 20% 窗寬。
+    const lastIndex = 1
+    expect(to).toBeGreaterThan(lastIndex)
+    expect(to - lastIndex).toBeGreaterThanOrEqual(70 * 0.2 - 1)
+  })
+
+  it('updateBar 新增 bar 時視窗向右捲動(維持窗寬),同 time 覆寫不重套', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(100, 1)]) // 1 次
+    fake.timeScaleApi.setVisibleLogicalRange.mockClear()
+    ctrl.updateBar(bar(160, 2)) // 新 time → append → 重套窗
+    ctrl.updateBar(bar(160, 3)) // 同 time 覆寫 → 不重套
+    expect(fake.timeScaleApi.setVisibleLogicalRange).toHaveBeenCalledTimes(1)
+    const last = fake.timeScaleApi.setVisibleLogicalRange.mock.calls.at(-1)![0]
+    expect(last.to - last.from).toBeGreaterThanOrEqual(70)
+  })
+
+  it('fit()(Fit 按鈕)維持 fitContent 全部資料語意(不被預設窗取代)', () => {
+    const { ctrl, fake } = makeController()
+    ctrl.setHistory([bar(100, 1), bar(160, 2)])
+    ctrl.fit()
+    expect(fake.timeScaleApi.fitContent).toHaveBeenCalledTimes(1)
   })
 })

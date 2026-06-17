@@ -9,6 +9,8 @@ import {
   fillToMarker,
   orderToPriceLines,
   tradeToMarkers,
+  formatPrice,
+  formatPnl,
   type PriceLineSpec,
 } from '@/lib/tradeMapping'
 import type { OrderFilledData, OrderInitializedData } from '@/types/contract'
@@ -184,5 +186,86 @@ describe('tradeToMarkers 進出場視覺區分', () => {
     expect(shortEntry.shape).toBe('arrowDown')
     // 出場形狀不是箭頭(circle/square),確保與進場箭頭視覺分離。
     expect(['arrowUp', 'arrowDown']).not.toContain(shortExit.shape)
+  })
+})
+
+// --- 問題 1:進場/出場 marker 各顯示對應成交價,且與 PnL 號一致 ----------------
+//
+// 使用者回報 run #94「進出場 marker 同一價卻有非零 PnL」。實查 DB:同一筆 trade 的
+// entry_price≠exit_price(差值 × qty × 方向 = pnl);只有 always-in-market 反手下
+// 「某筆出場價 = 下一筆進場價」(同一根反手 fill),那是兩筆不同 trade 的邊界,
+// 非同一筆。故 marker 取值正確的不變式:同一筆 entry/exit 文字標示不同價、且方向
+// 與 pnl 號一致(進場 fixture 用 run #94 第 471 列:SHORT 42512.9→42532.3 pnl -1.94)。
+
+const RUN94_LOSS_SHORT: TradeRecord = {
+  id: 471,
+  run_id: 94,
+  instrument_id: 'BTCUSDT-PERP.BINANCE',
+  side: 'SHORT',
+  entry_price: '42512.90000000',
+  exit_price: '42532.30000000',
+  quantity: '0.10000000',
+  sl: null,
+  tp: null,
+  pnl: '-1.94000000',
+  opened_at: '2024-01-01T00:00:00Z',
+  closed_at: '2024-01-01T00:02:00Z',
+}
+
+describe('tradeToMarkers 進出場各取對應成交價(問題1)', () => {
+  it('同一筆的進場與出場 marker 標示不同價格', () => {
+    const [entry, exit] = tradeToMarkers(RUN94_LOSS_SHORT)
+    expect(entry.text).toContain('42512.9')
+    expect(exit.text).toContain('42532.3')
+    expect(entry.text).not.toBe(exit.text)
+  })
+
+  it('SHORT 虧損:進場價 < 出場價(價漲對空單不利,與負 PnL 一致)', () => {
+    const [entry, exit] = tradeToMarkers(RUN94_LOSS_SHORT)
+    expect(Number(RUN94_LOSS_SHORT.entry_price)).toBeLessThan(
+      Number(RUN94_LOSS_SHORT.exit_price),
+    )
+    // 文字反映上述兩個不同價。
+    expect(entry.text).toContain('Entry')
+    expect(exit.text).toContain('Exit')
+  })
+
+  it('LONG 獲利:進場價 < 出場價(與正 PnL 一致),兩 marker 不同價', () => {
+    const [entry, exit] = tradeToMarkers(LONG_TRADE) // 100 → 110, pnl 5
+    expect(entry.text).toContain('100')
+    expect(exit.text).toContain('110')
+  })
+})
+
+// --- 問題 2:marker 文字去尾隨零 ------------------------------------------------
+
+describe('formatPrice / formatPnl 去尾零', () => {
+  it('formatPrice 去掉 NUMERIC 尾零', () => {
+    expect(formatPrice('42532.30000000')).toBe('42532.3')
+    expect(formatPrice('44472.50000000')).toBe('44472.5')
+  })
+  it('formatPrice 整數無小數點', () => {
+    expect(formatPrice('42000.00000000')).toBe('42000')
+  })
+  it('formatPnl 兩位小數', () => {
+    expect(formatPnl('-1.94000000')).toBe('-1.94')
+    expect(formatPnl('5')).toBe('5.00')
+  })
+  it('formatPrice 非數字原樣回傳(防呆)', () => {
+    expect(formatPrice('n/a')).toBe('n/a')
+  })
+})
+
+describe('tradeToMarkers 文字無長尾零(問題2)', () => {
+  it('出場文字為乾淨格式 Exit @ <price> (PnL <2dp>)', () => {
+    const [, exit] = tradeToMarkers(RUN94_LOSS_SHORT)
+    expect(exit.text).toBe('Exit @ 42532.3 (PnL -1.94)')
+    // 無長尾零(連續 5 個以上的 0)。
+    expect(exit.text).not.toMatch(/0{5,}/)
+  })
+  it('進場文字價格去尾零', () => {
+    const [entry] = tradeToMarkers(RUN94_LOSS_SHORT)
+    expect(entry.text).toContain('@ 42512.9')
+    expect(entry.text).not.toMatch(/0{5,}/)
   })
 })

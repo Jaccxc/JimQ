@@ -24,6 +24,7 @@ const calls = {
   clearEquityLine: vi.fn(),
   reset: vi.fn(),
   fit: vi.fn(),
+  applyDefaultWindow: vi.fn(),
   destroy: vi.fn(),
 }
 vi.mock('@/lib/chartController', () => ({
