@@ -43,6 +43,7 @@ function makeSink(): ReplaySink & {
   historyCalls: BarDTO[][]
   resetCount: number
   fitCount: number
+  defaultWindowCount: number
 } {
   const appended: BarDTO[] = []
   const markerCalls: MarkerSpec[][] = []
@@ -55,6 +56,7 @@ function makeSink(): ReplaySink & {
     historyCalls,
     resetCount: 0,
     fitCount: 0,
+    defaultWindowCount: 0,
     updateBar(b: BarDTO) {
       appended.push(b)
     },
@@ -75,6 +77,9 @@ function makeSink(): ReplaySink & {
     },
     fit() {
       this.fitCount += 1
+    },
+    applyDefaultWindow() {
+      this.defaultWindowCount += 1
     },
   }
 }
@@ -112,6 +117,23 @@ describe('useReplayPlayer 載入與初始狀態', () => {
     // index 0(time=100)之前無 marker/equity → 累積為空。
     expect(sink.markerCalls.at(-1)).toEqual([])
     expect(sink.equityCalls.at(-1)).toEqual([])
+  })
+
+  it('load(回放開頭)套用預設窗而非 fit 縮到僅有的 1 根(問題3)', () => {
+    const p = useReplayPlayer(sink)
+    p.load({ bars: BARS, markers: MARKERS, equity: EQUITY })
+    // 進圖/回放開頭應呼叫 applyDefaultWindow(≥70 根 + 右側留白),不是 fitContent。
+    expect(sink.defaultWindowCount).toBeGreaterThan(0)
+    expect(sink.fitCount).toBe(0)
+  })
+
+  it('replay 重播開頭同樣用預設窗', () => {
+    const p = useReplayPlayer(sink)
+    p.load({ bars: BARS, markers: MARKERS, equity: EQUITY })
+    const before = sink.defaultWindowCount
+    p.replay()
+    p.pause()
+    expect(sink.defaultWindowCount).toBeGreaterThan(before)
   })
 })
 

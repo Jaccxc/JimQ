@@ -108,6 +108,39 @@ function isoToSec(iso: string): number {
 }
 
 /**
+ * 價格格式化:去尾隨零、最多 ``maxDp`` 位小數。
+ * NUMERIC(30,8) 來的字串(如 `42532.30000000`)會帶一長串尾零,marker 文字
+ * 直接塞會很醜(`Exit @ 42532.30000000000`)。此處轉成 `42532.3`、整數則無小數點。
+ * 非數字字串原樣回傳(防呆)。
+ */
+export function formatPrice(value: string | number, maxDp = 2): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return String(value)
+  // toFixed 後去尾零與多餘小數點(toFixed 不會產生科學記號,價格範圍內安全)。
+  return n.toFixed(maxDp).replace(/\.?0+$/, '')
+}
+
+/**
+ * 數量格式化:去尾隨零、最多 ``maxDp`` 位小數(NUMERIC(30,8) 的 `0.10000000` → `0.1`)。
+ * 非數字原樣回傳。
+ */
+export function formatQty(value: string | number, maxDp = 8): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return String(value)
+  return n.toFixed(maxDp).replace(/\.?0+$/, '')
+}
+
+/**
+ * PnL 格式化:固定兩位小數(如 `-1.94`),不去尾零(保留會計式對齊)。
+ * 非數字原樣回傳。
+ */
+export function formatPnl(value: string | number): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return String(value)
+  return n.toFixed(2)
+}
+
+/**
  * persisted trade → 進場 + 出場 marker(視覺可區分,卡 D)。
  *
  * 進場:**實心箭頭**指向部位方向(LONG=arrowUp/belowBar、SHORT=arrowDown/aboveBar),
@@ -122,7 +155,7 @@ export function tradeToMarkers(trade: import('@/api/trades').TradeRecord): Marke
     position: isLong ? 'belowBar' : 'aboveBar',
     shape: isLong ? 'arrowUp' : 'arrowDown',
     color: isLong ? BUY_COLOR : SELL_COLOR,
-    text: `Entry ${trade.side} ${trade.quantity} @ ${trade.entry_price}`,
+    text: `Entry ${trade.side} ${formatQty(trade.quantity)} @ ${formatPrice(trade.entry_price)}`,
   }
   const exit: MarkerSpec = {
     time: isoToSec(trade.closed_at),
@@ -130,7 +163,10 @@ export function tradeToMarkers(trade: import('@/api/trades').TradeRecord): Marke
     position: isLong ? 'aboveBar' : 'belowBar',
     shape: 'circle',
     color: EXIT_COLOR,
-    text: `Exit @ ${trade.exit_price}${trade.pnl != null ? ` (PnL ${trade.pnl})` : ''}`,
+    // 進/出場各自取對應成交價(entry_price / exit_price);格式化去尾零。
+    // 註:always-in-market 反手策略下,某筆出場價=下一筆進場價(同一根反手 fill),
+    // 但同一筆的 entry_price≠exit_price(除最後未平倉尾段),且差值方向與 pnl 一致。
+    text: `Exit @ ${formatPrice(trade.exit_price)}${trade.pnl != null ? ` (PnL ${formatPnl(trade.pnl)})` : ''}`,
   }
   return [entry, exit]
 }

@@ -18,6 +18,7 @@ const controllerCalls = {
   clearEquityLine: vi.fn(),
   reset: vi.fn(),
   fit: vi.fn(),
+  applyDefaultWindow: vi.fn(),
   destroy: vi.fn(),
   clearPriceLines: vi.fn(),
   addPriceLine: vi.fn(),

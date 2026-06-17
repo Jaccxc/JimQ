@@ -37,8 +37,11 @@ export interface ReplaySink {
   clearEquityLine(): void
   /** 清空 K 線/marker/equity(往回 / 重播用)。 */
   reset(): void
-  /** 時間軸/價格軸自動貼合。 */
+  /** 時間軸/價格軸自動貼合(fit 全部資料;供 ⏭ 跳結尾看完整段)。 */
   fit(): void
+  /** 預設縮放窗(≥70 根 + 右側 ~20% 空白);回放開頭/往回重建用,
+   *  避免只有 1~2 根時被 fitContent 放大成 2 根超大蠟燭(問題3)。 */
+  applyDefaultWindow(): void
 }
 
 export interface ReplayData {
@@ -113,7 +116,8 @@ export function useReplayPlayer(sink: ReplaySink) {
       sink.reset()
       sink.setHistory(data.bars.slice(0, next + 1))
       applyOverlays(barTime)
-      sink.fit()
+      // 往回重建:用預設窗(≥70 根 + 右側留白),非 fit 縮到僅有的幾根。
+      sink.applyDefaultWindow()
     } else {
       // 往前:只 append 從 currentIndex+1..next 的新 bar(首次 load 時含 0)。
       const from = currentIndex.value === next ? next : currentIndex.value + 1
@@ -134,7 +138,8 @@ export function useReplayPlayer(sink: ReplaySink) {
     // 畫出第 0 根(只有第一根,無未來 marker/equity)。
     sink.updateBar(data.bars[0])
     applyOverlays(data.bars[0].time)
-    sink.fit()
+    // 回放開頭即為預設窗(≥70 根 + 右側留白),而非把 1 根放大成超大蠟燭(問題3)。
+    sink.applyDefaultWindow()
   }
 
   /** 重設推進基準到當前 index(開始播 / 改速度 / 暫停續播時呼叫)。 */
@@ -182,7 +187,8 @@ export function useReplayPlayer(sink: ReplaySink) {
     const wasPlaying = playing.value
     pause()
     goTo(index)
-    sink.fit()
+    // scrub 跳轉:維持預設捲動窗(往前補畫時 LWC 預設停在最新幾根;往回 goTo 已重建)。
+    sink.applyDefaultWindow()
     if (wasPlaying && currentIndex.value < total.value - 1) play()
   }
 
@@ -194,7 +200,8 @@ export function useReplayPlayer(sink: ReplaySink) {
     currentIndex.value = 0
     sink.updateBar(data.bars[0])
     applyOverlays(data.bars[0].time)
-    sink.fit()
+    // 重播開頭也用預設窗(問題3)。
+    sink.applyDefaultWindow()
     play()
   }
 
